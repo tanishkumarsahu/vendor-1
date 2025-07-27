@@ -1,41 +1,29 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { connectToDatabase, Transaction, Order } from '@/lib/mongodb';
+import { mongoClient } from '@/lib/mongodb-client';
 
 export async function GET(request: NextRequest) {
   try {
-    await connectToDatabase();
-    
     const { searchParams } = new URL(request.url);
     const paymentRequestId = searchParams.get('payment_request_id');
     const orderId = searchParams.get('order_id');
-    
+
     if (!paymentRequestId && !orderId) {
-      return NextResponse.json(
-        { error: 'Payment request ID or order ID is required' },
-        { status: 400 }
-      );
+      return NextResponse.json({ error: 'Payment request ID or order ID is required' }, { status: 400 });
     }
-    
+
     let transaction;
     if (paymentRequestId) {
-      transaction = await Transaction.findOne({ paymentRequestId });
+      transaction = await mongoClient.from('transactions').select().eq('paymentRequestId', paymentRequestId);
     } else if (orderId) {
-      transaction = await Transaction.findOne({ orderId });
+      transaction = await mongoClient.from('transactions').select().eq('orderId', orderId);
     }
-    
+
     if (!transaction) {
-      return NextResponse.json(
-        { error: 'Transaction not found' },
-        { status: 404 }
-      );
+      return NextResponse.json({ error: 'Transaction not found' }, { status: 404 });
     }
-    
-    // Get order details
-    const order = await Order.findById(transaction.orderId)
-      .populate('vendorId')
-      .populate('supplierId')
-      .populate('items.productId');
-    
+
+    const order = await mongoClient.from('orders').select().eq('_id', transaction.orderId);
+
     return NextResponse.json({
       success: true,
       transaction: {
@@ -63,12 +51,8 @@ export async function GET(request: NextRequest) {
         updatedAt: order.updatedAt,
       } : null,
     });
-    
   } catch (error: any) {
     console.error('Payment status error:', error);
-    return NextResponse.json(
-      { error: 'Internal server error' },
-      { status: 500 }
-    );
+    return NextResponse.json({ error: 'Internal server error' }, { status: 500 });
   }
 } 

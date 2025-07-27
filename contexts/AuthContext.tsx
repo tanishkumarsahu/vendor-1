@@ -83,10 +83,10 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       const { data: profile, error: profileError } = await supabase
         .from("profiles")
         .select("*")
-        .eq("id", authUser.id)
+        .eq("user_id", authUser.id)
         .single()
 
-      if (profileError) {
+      if (profileError && profileError.code !== 'PGRST116') {
         console.error("Error loading profile:", profileError)
         setUser(authUser)
         setLoading(false)
@@ -142,11 +142,11 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       if (data.user) {
         // Create profile
         const { error: profileError } = await supabase.from("profiles").insert({
-          id: data.user.id,
+          user_id: data.user.id,
           role: userData.role,
         })
 
-        if (profileError) {
+        if (profileError && profileError.code !== '23505') { // Ignore duplicate key errors
           console.error("Profile creation error:", profileError)
           return { error: "Failed to create profile" }
         }
@@ -161,11 +161,12 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
             phone: userData.phone,
             city: userData.city,
             state: userData.state,
+            pincode: userData.pincode || "",
             verification_status: false,
             rating: 0,
           })
 
-          if (vendorError) {
+          if (vendorError && vendorError.code !== '23505') { // Ignore duplicate key errors
             console.error("Vendor profile creation error:", vendorError)
             return { error: "Failed to create vendor profile" }
           }
@@ -177,12 +178,13 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
             address: userData.address,
             city: userData.city,
             state: userData.state,
+            pincode: userData.pincode || "",
             phone: userData.phone,
             verification_status: false,
             rating: 0,
           })
 
-          if (supplierError) {
+          if (supplierError && supplierError.code !== '23505') { // Ignore duplicate key errors
             console.error("Supplier profile creation error:", supplierError)
             return { error: "Failed to create supplier profile" }
           }

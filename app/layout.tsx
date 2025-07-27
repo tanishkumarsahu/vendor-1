@@ -1,5 +1,5 @@
 import type React from "react"
-import type { Metadata } from "next"
+import type { Metadata, Viewport } from "next"
 import { Inter } from "next/font/google"
 import "./globals.css"
 import { AuthProvider } from "@/contexts/AuthContext"
@@ -14,9 +14,13 @@ export const metadata: Metadata = {
   description: "Connect street food vendors with verified raw material suppliers across India",
   keywords: "street food, vendors, suppliers, B2B marketplace, raw materials, India",
   authors: [{ name: "VendorMitra Team" }],
-  viewport: "width=device-width, initial-scale=1",
-  themeColor: "#1e40af",
-    generator: 'v0.dev'
+  generator: 'v0.dev'
+}
+
+export const viewport: Viewport = {
+  width: 'device-width',
+  initialScale: 1,
+  themeColor: '#1e40af',
 }
 
 export default function RootLayout({

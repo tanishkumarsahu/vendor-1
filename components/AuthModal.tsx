@@ -12,7 +12,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Textarea } from "@/components/ui/textarea"
 import { useAuth } from "@/contexts/AuthContext"
 import { useRouter } from "next/navigation"
-import { useToast } from "@/hooks/use-toast"
+import { toast } from "sonner"
 import { Loader2, Upload, Users, Package } from "lucide-react"
 
 interface AuthModalProps {
@@ -40,7 +40,7 @@ export function AuthModal({ isOpen, onClose, type, userType, onTypeChange, onUse
   const [loading, setLoading] = useState(false)
   const { signIn, signUp } = useAuth()
   const router = useRouter()
-  const { toast } = useToast()
+
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
@@ -50,16 +50,9 @@ export function AuthModal({ isOpen, onClose, type, userType, onTypeChange, onUse
       if (type === "login") {
         const { error } = await signIn(formData.email, formData.password)
         if (error) {
-          toast({
-            title: "Login Failed",
-            description: error,
-            variant: "destructive",
-          })
+          toast.error(error)
         } else {
-          toast({
-            title: "Welcome back!",
-            description: "You have been successfully logged in.",
-          })
+          toast.success("Welcome back! You have been successfully logged in.")
           onClose()
           router.push("/dashboard")
         }
@@ -77,26 +70,15 @@ export function AuthModal({ isOpen, onClose, type, userType, onTypeChange, onUse
         })
 
         if (error) {
-          toast({
-            title: "Registration Failed",
-            description: error,
-            variant: "destructive",
-          })
+          toast.error(error)
         } else {
-          toast({
-            title: "Registration Successful!",
-            description: "Please check your email to verify your account.",
-          })
+          toast.success("Registration Successful! Please check your email to verify your account.")
           onClose()
           router.push("/dashboard")
         }
       }
     } catch (error) {
-      toast({
-        title: "Error",
-        description: "Something went wrong. Please try again.",
-        variant: "destructive",
-      })
+      toast.error("Something went wrong. Please try again.")
     } finally {
       setLoading(false)
     }

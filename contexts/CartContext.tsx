@@ -4,7 +4,7 @@ import type React from "react"
 import { createContext, useContext, useState, useEffect } from "react"
 import { useAuth } from "./AuthContext"
 import { supabase } from "@/lib/supabase"
-import { instamojo } from "@/lib/instamojo"
+import { instamojoService } from "@/lib/instamojo"
 import type { Product } from "@/lib/supabase"
 
 interface CartItem {
@@ -151,9 +151,9 @@ export function CartProvider({ children }: { children: React.ReactNode }) {
 
       // Create payment request for total amount
       const totalOrderAmount = orders.reduce((sum, order) => sum + order.total, 0)
-      const commission = instamojo.calculateCommission(totalOrderAmount)
+      const commission = instamojoService.calculateCommission(totalOrderAmount)
 
-      const paymentRequest = await instamojo.createPaymentRequest({
+              const paymentRequest = await instamojoService.createPaymentRequest({
         purpose: `VendorMitra Order - ${orders.map((o) => o.id).join(", ")}`,
         amount: totalOrderAmount,
         buyer_name: user.profile?.business_name || user.email || "Customer",

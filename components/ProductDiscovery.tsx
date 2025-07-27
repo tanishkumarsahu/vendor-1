@@ -8,10 +8,10 @@ import { Badge } from "@/components/ui/badge"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { Slider } from "@/components/ui/slider"
 import { Search, Star, MapPin, ShoppingCart, Package, TrendingUp, Users, Clock, Truck } from "lucide-react"
-import { supabase } from "@/lib/supabase"
+import { mongoClient } from "@/lib/mongodb-client"
 import { useCart } from "@/contexts/CartContext"
 import { useToast } from "@/hooks/use-toast"
-import type { Product, SupplierProfile } from "@/lib/supabase"
+import type { Product, SupplierProfile } from "@/lib/mongodb-client"
 
 interface ProductWithSupplier extends Product {
   supplier: SupplierProfile
@@ -42,7 +42,7 @@ export function ProductDiscovery() {
     try {
       setLoading(true)
 
-      const { data: productsData, error: productsError } = await supabase
+      const { data: productsData, error: productsError } = await mongoClient
         .from("products")
         .select(`
           *,

@@ -1,13 +1,24 @@
 "use client"
 
-import { useState } from "react"
+import { useState, useEffect } from "react"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { ShoppingCart, Users, TrendingUp, Shield, MapPin, Star, Globe, ArrowRight } from "lucide-react"
 import Link from "next/link"
 import { AuthModal } from "@/components/AuthModal"
+import { useRouter } from "next/navigation"
+import { useAuth } from "@/contexts/AuthContext"
 
 export function LandingPage() {
+  const { user } = useAuth()
+  const router = useRouter()
+
+  useEffect(() => {
+    if (user) {
+      router.push("/dashboard")
+    }
+  }, [user, router])
+
   const [showAuthModal, setShowAuthModal] = useState(false)
   const [authType, setAuthType] = useState<"login" | "register">("login")
   const [userType, setUserType] = useState<"vendor" | "supplier">("vendor")

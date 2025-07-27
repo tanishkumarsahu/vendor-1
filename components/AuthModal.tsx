@@ -1,313 +1,380 @@
 "use client"
 
-import type React from "react"
-
 import { useState } from "react"
-import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog"
 import { Button } from "@/components/ui/button"
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogHeader,
+  DialogTitle,
+  DialogTrigger,
+} from "@/components/ui/dialog"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
-import { Textarea } from "@/components/ui/textarea"
 import { useAuth } from "@/contexts/AuthContext"
-import { useRouter } from "next/navigation"
 import { toast } from "sonner"
-import { Loader2, Upload, Users, Package } from "lucide-react"
 
-interface AuthModalProps {
-  isOpen: boolean
-  onClose: () => void
-  type: "login" | "register"
-  userType: "vendor" | "supplier"
-  onTypeChange: (type: "login" | "register") => void
-  onUserTypeChange: (type: "vendor" | "supplier") => void
-}
+export function AuthModal() {
+  const { signIn, signUp } = useAuth()
+  const [isOpen, setIsOpen] = useState(false)
+  const [isLoading, setIsLoading] = useState(false)
 
-export function AuthModal({ isOpen, onClose, type, userType, onTypeChange, onUserTypeChange }: AuthModalProps) {
-  const [formData, setFormData] = useState({
+  // Sign In State
+  const [signInEmail, setSignInEmail] = useState("")
+  const [signInPassword, setSignInPassword] = useState("")
+
+  // Sign Up State
+  const [signUpData, setSignUpData] = useState({
     email: "",
     password: "",
+    confirmPassword: "",
+    role: "",
     businessName: "",
+    gstNumber: "",
     phone: "",
-    address: "",
+    street: "",
     city: "",
     state: "",
     pincode: "",
-    gstNumber: "",
-    foodType: "",
+    foodType: "", // ADDED
   })
-  const [loading, setLoading] = useState(false)
-  const { signIn, signUp } = useAuth()
-  const router = useRouter()
 
-
-  const handleSubmit = async (e: React.FormEvent) => {
+  const handleSignIn = async (e: React.FormEvent) => {
     e.preventDefault()
-    setLoading(true)
+    setIsLoading(true)
 
     try {
-      if (type === "login") {
-        const { error } = await signIn(formData.email, formData.password)
-        if (error) {
-          toast.error(error)
-        } else {
-          toast.success("Welcome back! You have been successfully logged in.")
-          onClose()
-          router.push("/dashboard")
-        }
+      const result = await signIn(signInEmail, signInPassword)
+      
+      if (result.error) {
+        toast.error(result.error)
       } else {
-        const { error } = await signUp(formData.email, formData.password, {
-          role: userType,
-          businessName: formData.businessName,
-          phone: formData.phone,
-          address: formData.address,
-          city: formData.city,
-          state: formData.state,
-          pincode: formData.pincode,
-          gstNumber: formData.gstNumber,
-          foodType: formData.foodType,
-        })
-
-        if (error) {
-          toast.error(error)
-        } else {
-          toast.success("Registration Successful! Please check your email to verify your account.")
-          onClose()
-          router.push("/dashboard")
-        }
+        toast.success("Welcome back! You have been successfully logged in.")
+        setIsOpen(false)
+        setSignInEmail("")
+        setSignInPassword("")
       }
     } catch (error) {
       toast.error("Something went wrong. Please try again.")
     } finally {
-      setLoading(false)
+      setIsLoading(false)
     }
   }
 
-  const handleInputChange = (field: string, value: string) => {
-    setFormData((prev) => ({ ...prev, [field]: value }))
+  const handleSignUp = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setIsLoading(true);
+
+    if (signUpData.password !== signUpData.confirmPassword) {
+      toast.error("Passwords do not match");
+      setIsLoading(false);
+      return;
+    }
+
+    // Compose address string
+    const address = `${signUpData.street}, ${signUpData.city}, ${signUpData.state} - ${signUpData.pincode}`;
+
+    // Prepare the payload to match backend schema
+    const payload = {
+      email: signUpData.email,
+      password: signUpData.password,
+      role: signUpData.role,
+      businessName: signUpData.businessName,
+      phone: signUpData.phone,
+      address,
+      city: signUpData.city,
+      state: signUpData.state,
+      pincode: signUpData.pincode,
+      gstNumber: signUpData.gstNumber,
+      foodType: signUpData.foodType,
+    };
+
+    try {
+      const result = await signUp(payload);
+      if (result.error) {
+        toast.error(result.error);
+      } else {
+        toast.success("Registration Successful! Please check your email to verify your account.");
+        setIsOpen(false);
+        setSignUpData({
+          email: "",
+          password: "",
+          confirmPassword: "",
+          role: "",
+          businessName: "",
+          gstNumber: "",
+          phone: "",
+          street: "",
+          city: "",
+          state: "",
+          pincode: "",
+          foodType: "",
+        });
+      }
+    } catch (error) {
+      toast.error("Something went wrong. Please try again.");
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  const updateSignUpData = (field: string, value: string) => {
+    setSignUpData(prev => ({ ...prev, [field]: value }))
   }
 
   return (
-    <Dialog open={isOpen} onOpenChange={onClose}>
-      <DialogContent className="sm:max-w-md max-h-[90vh] overflow-y-auto">
+    <Dialog open={isOpen} onOpenChange={setIsOpen}>
+      <DialogTrigger asChild>
+        <Button variant="outline">Sign In / Join Now</Button>
+      </DialogTrigger>
+      <DialogContent className="sm:max-w-[600px]">
         <DialogHeader>
-          <DialogTitle className="text-center">
-            {type === "login" ? "Welcome Back to VendorMitra" : "Join VendorMitra Today"}
-          </DialogTitle>
+          <DialogTitle>Welcome to VendorMitra</DialogTitle>
+          <DialogDescription>
+            Sign in to your account or create a new one to get started.
+          </DialogDescription>
         </DialogHeader>
-
-        <Tabs value={type} onValueChange={(value) => onTypeChange(value as "login" | "register")}>
+        <Tabs defaultValue="signin" className="w-full">
           <TabsList className="grid w-full grid-cols-2">
-            <TabsTrigger value="login">Sign In</TabsTrigger>
-            <TabsTrigger value="register">Join Now</TabsTrigger>
+            <TabsTrigger value="signin">Sign In</TabsTrigger>
+            <TabsTrigger value="signup">Sign Up</TabsTrigger>
           </TabsList>
-
-          <TabsContent value="login">
-            <form onSubmit={handleSubmit} className="space-y-4">
-              <div>
-                <Label htmlFor="email">Email Address</Label>
+          
+          <TabsContent value="signin" className="space-y-4">
+            <form onSubmit={handleSignIn} className="space-y-4">
+              <div className="space-y-2">
+                <Label htmlFor="signin-email">Email</Label>
+                <Input
+                  id="signin-email"
+                  type="email"
+                  placeholder="Enter your email"
+                  value={signInEmail}
+                  onChange={(e) => setSignInEmail(e.target.value)}
+                  required
+                />
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="signin-password">Password</Label>
+                <Input
+                  id="signin-password"
+                  type="password"
+                  placeholder="Enter your password"
+                  value={signInPassword}
+                  onChange={(e) => setSignInPassword(e.target.value)}
+                  required
+                />
+              </div>
+              <Button type="submit" className="w-full" disabled={isLoading}>
+                {isLoading ? "Signing In..." : "Sign In"}
+              </Button>
+            </form>
+          </TabsContent>
+          
+          <TabsContent value="signup" className="space-y-4">
+            <form onSubmit={handleSignUp} className="space-y-4">
+              <div className="grid grid-cols-2 gap-4">
+                <div className="space-y-2">
+                  <Label htmlFor="firstName">First Name</Label>
+                  <Input
+                    id="firstName"
+                    placeholder="First Name"
+                    value={signUpData.firstName}
+                    onChange={(e) => updateSignUpData("firstName", e.target.value)}
+                    required
+                  />
+                </div>
+                <div className="space-y-2">
+                  <Label htmlFor="lastName">Last Name</Label>
+                  <Input
+                    id="lastName"
+                    placeholder="Last Name"
+                    value={signUpData.lastName}
+                    onChange={(e) => updateSignUpData("lastName", e.target.value)}
+                    required
+                  />
+                </div>
+              </div>
+              
+              <div className="space-y-2">
+                <Label htmlFor="email">Email</Label>
                 <Input
                   id="email"
                   type="email"
-                  value={formData.email}
-                  onChange={(e) => handleInputChange("email", e.target.value)}
                   placeholder="Enter your email"
-                  className="vm-form-input"
+                  value={signUpData.email}
+                  onChange={(e) => updateSignUpData("email", e.target.value)}
                   required
                 />
               </div>
-
-              <div>
-                <Label htmlFor="password">Password</Label>
-                <Input
-                  id="password"
-                  type="password"
-                  value={formData.password}
-                  onChange={(e) => handleInputChange("password", e.target.value)}
-                  placeholder="Enter your password"
-                  className="vm-form-input"
-                  required
-                />
-              </div>
-
-              <Button type="submit" className="w-full vm-btn-primary" disabled={loading}>
-                {loading && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
-                Sign In
-              </Button>
-
-              <div className="text-center">
-                <Button variant="link" className="text-sm text-blue-600">
-                  Forgot your password?
-                </Button>
-              </div>
-            </form>
-          </TabsContent>
-
-          <TabsContent value="register">
-            <div className="mb-4">
-              <Label className="vm-form-label">I want to join as:</Label>
-              <Tabs value={userType} onValueChange={(value) => onUserTypeChange(value as "vendor" | "supplier")}>
-                <TabsList className="grid w-full grid-cols-2">
-                  <TabsTrigger value="vendor" className="flex items-center">
-                    <Users className="mr-2 h-4 w-4" />
-                    Vendor
-                  </TabsTrigger>
-                  <TabsTrigger value="supplier" className="flex items-center">
-                    <Package className="mr-2 h-4 w-4" />
-                    Supplier
-                  </TabsTrigger>
-                </TabsList>
-              </Tabs>
-            </div>
-
-            <form onSubmit={handleSubmit} className="space-y-4">
+              
               <div className="grid grid-cols-2 gap-4">
-                <div>
-                  <Label htmlFor="email">Email Address</Label>
+                <div className="space-y-2">
+                  <Label htmlFor="password">Password</Label>
                   <Input
-                    id="email"
-                    type="email"
-                    value={formData.email}
-                    onChange={(e) => handleInputChange("email", e.target.value)}
-                    placeholder="your@email.com"
-                    className="vm-form-input"
+                    id="password"
+                    type="password"
+                    placeholder="Create a password"
+                    value={signUpData.password}
+                    onChange={(e) => updateSignUpData("password", e.target.value)}
                     required
                   />
                 </div>
-                <div>
-                  <Label htmlFor="phone">Phone Number</Label>
+                <div className="space-y-2">
+                  <Label htmlFor="confirmPassword">Confirm Password</Label>
                   <Input
-                    id="phone"
-                    value={formData.phone}
-                    onChange={(e) => handleInputChange("phone", e.target.value)}
-                    placeholder="+91 9876543210"
-                    className="vm-form-input"
+                    id="confirmPassword"
+                    type="password"
+                    placeholder="Confirm your password"
+                    value={signUpData.confirmPassword}
+                    onChange={(e) => updateSignUpData("confirmPassword", e.target.value)}
                     required
                   />
                 </div>
               </div>
-
-              <div>
-                <Label htmlFor="password">Password</Label>
-                <Input
-                  id="password"
-                  type="password"
-                  value={formData.password}
-                  onChange={(e) => handleInputChange("password", e.target.value)}
-                  placeholder="Create a strong password"
-                  className="vm-form-input"
-                  required
-                />
+              
+              <div className="space-y-2">
+                <Label htmlFor="role">I am a</Label>
+                <Select value={signUpData.role} onValueChange={(value) => updateSignUpData("role", value)}>
+                  <SelectTrigger>
+                    <SelectValue placeholder="Select your role" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="vendor">Vendor (Buyer)</SelectItem>
+                    <SelectItem value="supplier">Supplier (Seller)</SelectItem>
+                  </SelectContent>
+                </Select>
               </div>
-
-              <div>
-                <Label htmlFor="businessName">{userType === "vendor" ? "Business Name" : "Company Name"}</Label>
+              
+              <div className="space-y-2">
+                <Label htmlFor="businessName">Business Name</Label>
                 <Input
                   id="businessName"
-                  value={formData.businessName}
-                  onChange={(e) => handleInputChange("businessName", e.target.value)}
-                  placeholder={userType === "vendor" ? "Kumar Chaat Corner" : "Fresh Vegetables Supply Co."}
-                  className="vm-form-input"
+                  placeholder="Enter your business name"
+                  value={signUpData.businessName}
+                  onChange={(e) => updateSignUpData("businessName", e.target.value)}
                   required
                 />
               </div>
-
-              {userType === "vendor" && (
-                <div>
-                  <Label htmlFor="foodType">Food Specialization</Label>
-                  <Select onValueChange={(value) => handleInputChange("foodType", value)}>
-                    <SelectTrigger className="vm-form-input">
-                      <SelectValue placeholder="Select your specialization" />
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="chaat">Chaat & Snacks</SelectItem>
-                      <SelectItem value="beverages">Beverages</SelectItem>
-                      <SelectItem value="sweets">Sweets & Desserts</SelectItem>
-                      <SelectItem value="meals">Full Meals</SelectItem>
-                      <SelectItem value="street-food">General Street Food</SelectItem>
-                    </SelectContent>
-                  </Select>
-                </div>
-              )}
-
-              {userType === "supplier" && (
-                <div>
-                  <Label htmlFor="gstNumber">GST Number</Label>
+              
+              <div className="space-y-2">
+                <Label htmlFor="businessType">Business Type</Label>
+                <Select value={signUpData.businessType} onValueChange={(value) => updateSignUpData("businessType", value)}>
+                  <SelectTrigger>
+                    <SelectValue placeholder="Select business type" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {signUpData.role === "vendor" ? (
+                      <>
+                        <SelectItem value="individual">Individual</SelectItem>
+                        <SelectItem value="partnership">Partnership</SelectItem>
+                        <SelectItem value="corporation">Corporation</SelectItem>
+                        <SelectItem value="llc">LLC</SelectItem>
+                      </>
+                    ) : (
+                      <>
+                        <SelectItem value="manufacturer">Manufacturer</SelectItem>
+                        <SelectItem value="wholesaler">Wholesaler</SelectItem>
+                        <SelectItem value="distributor">Distributor</SelectItem>
+                        <SelectItem value="retailer">Retailer</SelectItem>
+                      </>
+                    )}
+                  </SelectContent>
+                </Select>
+              </div>
+              
+              <div className="grid grid-cols-2 gap-4">
+                <div className="space-y-2">
+                  <Label htmlFor="gstNumber">GST Number (Optional)</Label>
                   <Input
                     id="gstNumber"
-                    value={formData.gstNumber}
-                    onChange={(e) => handleInputChange("gstNumber", e.target.value)}
-                    placeholder="22AAAAA0000A1Z5"
-                    className="vm-form-input"
+                    placeholder="GST Number"
+                    value={signUpData.gstNumber}
+                    onChange={(e) => updateSignUpData("gstNumber", e.target.value)}
                   />
                 </div>
-              )}
-
-              <div>
-                <Label htmlFor="address">Business Address</Label>
-                <Textarea
-                  id="address"
-                  value={formData.address}
-                  onChange={(e) => handleInputChange("address", e.target.value)}
-                  placeholder="Shop/Warehouse address"
-                  className="vm-form-input"
+                <div className="space-y-2">
+                  <Label htmlFor="panNumber">PAN Number (Optional)</Label>
+                  <Input
+                    id="panNumber"
+                    placeholder="PAN Number"
+                    value={signUpData.panNumber}
+                    onChange={(e) => updateSignUpData("panNumber", e.target.value)}
+                  />
+                </div>
+              </div>
+              
+              <div className="space-y-2">
+                <Label htmlFor="phone">Phone Number</Label>
+                <Input
+                  id="phone"
+                  type="tel"
+                  placeholder="Enter your phone number"
+                  value={signUpData.phone}
+                  onChange={(e) => updateSignUpData("phone", e.target.value)}
                   required
                 />
               </div>
-
+              
+              <div className="space-y-2">
+                <Label htmlFor="street">Street Address</Label>
+                <Input
+                  id="street"
+                  placeholder="Enter your street address"
+                  value={signUpData.street}
+                  onChange={(e) => updateSignUpData("street", e.target.value)}
+                  required
+                />
+              </div>
+              
               <div className="grid grid-cols-3 gap-4">
-                <div>
+                <div className="space-y-2">
                   <Label htmlFor="city">City</Label>
                   <Input
                     id="city"
-                    value={formData.city}
-                    onChange={(e) => handleInputChange("city", e.target.value)}
-                    placeholder="Delhi"
-                    className="vm-form-input"
+                    placeholder="City"
+                    value={signUpData.city}
+                    onChange={(e) => updateSignUpData("city", e.target.value)}
                     required
                   />
                 </div>
-                <div>
+                <div className="space-y-2">
                   <Label htmlFor="state">State</Label>
                   <Input
                     id="state"
-                    value={formData.state}
-                    onChange={(e) => handleInputChange("state", e.target.value)}
-                    placeholder="Delhi"
-                    className="vm-form-input"
+                    placeholder="State"
+                    value={signUpData.state}
+                    onChange={(e) => updateSignUpData("state", e.target.value)}
                     required
                   />
                 </div>
-                <div>
+                <div className="space-y-2">
                   <Label htmlFor="pincode">Pincode</Label>
                   <Input
                     id="pincode"
-                    value={formData.pincode}
-                    onChange={(e) => handleInputChange("pincode", e.target.value)}
-                    placeholder="110001"
-                    className="vm-form-input"
+                    placeholder="Pincode"
+                    value={signUpData.pincode}
+                    onChange={(e) => updateSignUpData("pincode", e.target.value)}
                     required
                   />
                 </div>
               </div>
-
-              <div className="border-2 border-dashed border-gray-300 rounded-lg p-4 text-center">
-                <Upload className="mx-auto h-8 w-8 text-gray-400 mb-2" />
-                <p className="text-sm text-gray-600">Upload Business Documents</p>
-                <p className="text-xs text-gray-500">
-                  {userType === "vendor" ? "Business license, ID proof" : "GST certificate, Trade license"}
-                </p>
+              
+              <div className="space-y-2">
+                <Label htmlFor="foodType">Food Type (Optional)</Label>
+                <Input
+                  id="foodType"
+                  placeholder="e.g. Chaat, South Indian, Snacks"
+                  value={signUpData.foodType}
+                  onChange={(e) => updateSignUpData("foodType", e.target.value)}
+                />
               </div>
-
-              <Button type="submit" className="w-full vm-btn-primary" disabled={loading}>
-                {loading && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
-                Create Account
+              
+              <Button type="submit" className="w-full" disabled={isLoading}>
+                {isLoading ? "Creating Account..." : "Create Account"}
               </Button>
-
-              <p className="text-xs text-gray-500 text-center">
-                By creating an account, you agree to our Terms of Service and Privacy Policy
-              </p>
             </form>
           </TabsContent>
         </Tabs>

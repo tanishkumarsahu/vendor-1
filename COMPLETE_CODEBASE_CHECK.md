@@ -36,7 +36,7 @@ This document provides a complete checklist of all components, files, and config
 ## 🔧 **LIBRARY & UTILITIES**
 
 ### ✅ **Core Libraries**
-- [x] `lib/supabase.ts` - Supabase client and types
+- [x] `lib/mongodb-client.ts` - MongoDB client and types
 - [x] `lib/instamojo.ts` - Payment gateway service
 - [x] `lib/utils.ts` - Utility functions
 - [x] `lib/constants.ts` - Application constants
@@ -45,7 +45,7 @@ This document provides a complete checklist of all components, files, and config
 
 ### ✅ **Type Definitions**
 - [x] `types/global.d.ts` - Global TypeScript types
-- [x] Type definitions in `lib/supabase.ts`
+- [x] Type definitions in `lib/mongodb-client.ts`
 - [x] Type definitions in `lib/instamojo.ts`
 
 ---
@@ -133,7 +133,7 @@ This document provides a complete checklist of all components, files, and config
 ### ✅ **API Routes**
 - [x] `app/api/status/route.ts` - Health check endpoint
 - [x] Payment API routes (see above)
-- [x] Database integration with Supabase
+- [x] Database integration with MongoDB
 
 ---
 
@@ -241,7 +241,7 @@ This document provides a complete checklist of all components, files, and config
 ## 🚀 **DEPLOYMENT CHECKLIST**
 
 ### ✅ **Environment Setup**
-- [x] Supabase project configured
+- [x] MongoDB project configured
 - [x] Instamojo credentials configured
 - [x] Environment variables documented
 - [x] Database schema ready

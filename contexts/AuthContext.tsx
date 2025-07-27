@@ -1,283 +1,151 @@
 "use client"
 
-import type React from "react"
-import { createContext, useContext, useState, useEffect } from "react"
-import { supabase } from "@/lib/supabase"
-import type { User } from "@supabase/supabase-js"
-import type { VendorProfile, SupplierProfile } from "@/lib/supabase"
+import React, { createContext, useContext, useEffect, useState } from "react"
+import { toast } from "sonner"
 
-interface AuthUser extends User {
-  profile?: VendorProfile | SupplierProfile
-  role?: "vendor" | "supplier"
+interface User {
+  id: string
+  email: string
+  role: 'vendor' | 'supplier'
+  emailVerified: boolean
+  profile?: any
+  roleProfile?: any
 }
 
 interface AuthContextType {
-  user: AuthUser | null
+  user: User | null
   loading: boolean
-  signUp: (email: string, password: string, userData: any) => Promise<{ error?: string; success?: boolean }>
-  signIn: (email: string, password: string) => Promise<{ error?: string; success?: boolean }>
-  signOut: () => Promise<void>
-  updateProfile: (data: any) => Promise<{ error?: string; success?: boolean }>
+  signUp: (userData: any) => Promise<{ error?: string }>
+  signIn: (email: string, password: string) => Promise<{ error?: string }>
+  signOut: () => void
+  loadUserProfile: () => Promise<void>
 }
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined)
 
 export function AuthProvider({ children }: { children: React.ReactNode }) {
-  const [user, setUser] = useState<AuthUser | null>(null)
+  const [user, setUser] = useState<User | null>(null)
   const [loading, setLoading] = useState(true)
 
+  // Load user from localStorage on mount
   useEffect(() => {
-    // Get initial session
-    const getInitialSession = async () => {
+    const token = localStorage.getItem('authToken')
+    const userData = localStorage.getItem('userData')
+    
+    if (token && userData) {
       try {
-        const {
-          data: { session },
-          error,
-        } = await supabase.auth.getSession()
-
-        if (error) {
-          console.error("Error getting session:", error)
-          setLoading(false)
-          return
-        }
-
-        if (session?.user) {
-          await loadUserProfile(session.user)
-        } else {
-          setLoading(false)
-        }
+        const parsedUser = JSON.parse(userData)
+        setUser(parsedUser)
+        loadUserProfile()
       } catch (error) {
-        console.error("Error in getInitialSession:", error)
-        setLoading(false)
+        console.error('Error parsing user data:', error)
+        localStorage.removeItem('authToken')
+        localStorage.removeItem('userData')
       }
     }
-
-    getInitialSession()
-
-    // Listen for auth changes
-    const {
-      data: { subscription },
-    } = supabase.auth.onAuthStateChange(async (event, session) => {
-      try {
-        if (session?.user) {
-          await loadUserProfile(session.user)
-        } else {
-          setUser(null)
-          setLoading(false)
-        }
-      } catch (error) {
-        console.error("Error in auth state change:", error)
-        setUser(null)
-        setLoading(false)
-      }
-    })
-
-    return () => subscription.unsubscribe()
+    setLoading(false)
   }, [])
 
-  const loadUserProfile = async (authUser: User) => {
+  const loadUserProfile = async () => {
     try {
-      setLoading(true)
+      const token = localStorage.getItem('authToken')
+      if (!token) return
 
-      // Get user profile
-      const { data: profile, error: profileError } = await supabase
-        .from("profiles")
-        .select("*")
-        .eq("user_id", authUser.id)
-        .single()
+      const response = await fetch('/api/auth/me', {
+        headers: {
+          'Authorization': `Bearer ${token}`,
+        },
+      })
 
-      if (profileError && profileError.code !== 'PGRST116') {
-        console.error("Error loading profile:", profileError)
-        setUser(authUser)
-        setLoading(false)
-        return
-      }
-
-      if (profile) {
-        // Get role-specific profile
-        let roleProfile = null
-        if (profile.role === "vendor") {
-          const { data, error } = await supabase.from("vendor_profiles").select("*").eq("user_id", authUser.id).single()
-
-          if (!error) roleProfile = data
-        } else if (profile.role === "supplier") {
-          const { data, error } = await supabase
-            .from("supplier_profiles")
-            .select("*")
-            .eq("user_id", authUser.id)
-            .single()
-
-          if (!error) roleProfile = data
+      if (response.ok) {
+        const data = await response.json()
+        const updatedUser = {
+          ...user,
+          ...data.user,
         }
-
-        setUser({
-          ...authUser,
-          role: profile.role,
-          profile: roleProfile,
-        })
+        setUser(updatedUser)
+        localStorage.setItem('userData', JSON.stringify(updatedUser))
       } else {
-        setUser(authUser)
+        // Token is invalid, clear storage
+        localStorage.removeItem('authToken')
+        localStorage.removeItem('userData')
+        setUser(null)
       }
     } catch (error) {
-      console.error("Error loading user profile:", error)
-      setUser(authUser)
-    } finally {
-      setLoading(false)
+      console.error('Error loading user profile:', error)
     }
   }
 
-  const signUp = async (email: string, password: string, userData: any) => {
+  const signUp = async (userData: any) => {
     try {
-      setLoading(true)
-
-      const { data, error } = await supabase.auth.signUp({
-        email,
-        password,
+      const response = await fetch('/api/auth/signup', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify(userData),
       })
 
-      if (error) {
-        return { error: error.message }
+      const data = await response.json()
+
+      if (response.ok) {
+        // Store token and user data
+        localStorage.setItem('authToken', data.token)
+        localStorage.setItem('userData', JSON.stringify(data.user))
+        setUser(data.user)
+        return {}
+      } else {
+        return { error: data.error || 'Registration failed' }
       }
-
-      if (data.user) {
-        // Create profile
-        const { error: profileError } = await supabase.from("profiles").insert({
-          user_id: data.user.id,
-          role: userData.role,
-        })
-
-        if (profileError && profileError.code !== '23505') { // Ignore duplicate key errors
-          console.error("Profile creation error:", profileError)
-          return { error: "Failed to create profile" }
-        }
-
-        // Create role-specific profile
-        if (userData.role === "vendor") {
-          const { error: vendorError } = await supabase.from("vendor_profiles").insert({
-            user_id: data.user.id,
-            business_name: userData.businessName,
-            food_type: userData.foodType || "",
-            location: userData.address,
-            phone: userData.phone,
-            city: userData.city,
-            state: userData.state,
-            pincode: userData.pincode || "",
-            verification_status: false,
-            rating: 0,
-          })
-
-          if (vendorError && vendorError.code !== '23505') { // Ignore duplicate key errors
-            console.error("Vendor profile creation error:", vendorError)
-            return { error: "Failed to create vendor profile" }
-          }
-        } else if (userData.role === "supplier") {
-          const { error: supplierError } = await supabase.from("supplier_profiles").insert({
-            user_id: data.user.id,
-            company_name: userData.businessName,
-            gst_number: userData.gstNumber || "",
-            address: userData.address,
-            city: userData.city,
-            state: userData.state,
-            pincode: userData.pincode || "",
-            phone: userData.phone,
-            verification_status: false,
-            rating: 0,
-          })
-
-          if (supplierError && supplierError.code !== '23505') { // Ignore duplicate key errors
-            console.error("Supplier profile creation error:", supplierError)
-            return { error: "Failed to create supplier profile" }
-          }
-        }
-
-        return { success: true }
-      }
-
-      return { error: "Registration failed" }
-    } catch (error: any) {
-      console.error("SignUp error:", error)
-      return { error: error.message || "Registration failed" }
-    } finally {
-      setLoading(false)
+    } catch (error) {
+      console.error('Signup error:', error)
+      return { error: 'Network error occurred' }
     }
   }
 
   const signIn = async (email: string, password: string) => {
     try {
-      setLoading(true)
-
-      const { data, error } = await supabase.auth.signInWithPassword({
-        email,
-        password,
+      const response = await fetch('/api/auth/signin', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ email, password }),
       })
 
-      if (error) {
-        return { error: error.message }
-      }
+      const data = await response.json()
 
-      if (data.user) {
-        return { success: true }
-      }
-
-      return { error: "Login failed" }
-    } catch (error: any) {
-      console.error("SignIn error:", error)
-      return { error: error.message || "Login failed" }
-    } finally {
-      setLoading(false)
-    }
-  }
-
-  const signOut = async () => {
-    try {
-      setLoading(true)
-      const { error } = await supabase.auth.signOut()
-      if (error) {
-        console.error("SignOut error:", error)
+      if (response.ok) {
+        // Store token and user data
+        localStorage.setItem('authToken', data.token)
+        localStorage.setItem('userData', JSON.stringify(data.user))
+        setUser(data.user)
+        return {}
+      } else {
+        return { error: data.error || 'Login failed' }
       }
     } catch (error) {
-      console.error("SignOut error:", error)
-    } finally {
-      setLoading(false)
+      console.error('Signin error:', error)
+      return { error: 'Network error occurred' }
     }
   }
 
-  const updateProfile = async (data: any) => {
-    try {
-      if (!user) return { error: "No user logged in" }
-
-      const tableName = user.role === "vendor" ? "vendor_profiles" : "supplier_profiles"
-
-      const { error } = await supabase.from(tableName).update(data).eq("user_id", user.id)
-
-      if (error) {
-        return { error: error.message }
-      }
-
-      // Reload profile
-      await loadUserProfile(user)
-
-      return { success: true }
-    } catch (error: any) {
-      console.error("UpdateProfile error:", error)
-      return { error: error.message || "Profile update failed" }
-    }
+  const signOut = () => {
+    localStorage.removeItem('authToken')
+    localStorage.removeItem('userData')
+    setUser(null)
   }
 
-  return (
-    <AuthContext.Provider
-      value={{
-        user,
-        loading,
-        signUp,
-        signIn,
-        signOut,
-        updateProfile,
-      }}
-    >
-      {children}
-    </AuthContext.Provider>
-  )
+  const value = {
+    user,
+    loading,
+    signUp,
+    signIn,
+    signOut,
+    loadUserProfile,
+  }
+
+  return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>
 }
 
 export function useAuth() {

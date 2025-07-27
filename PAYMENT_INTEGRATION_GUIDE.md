@@ -202,7 +202,7 @@ NEXT_PUBLIC_BASE_URL=https://your-domain.com
 ### **Database Migration**
 ```sql
 -- Run the updated database schema
--- Execute scripts/setup-database.sql in Supabase
+-- Execute scripts/setup-database.sql in MongoDB
 ```
 
 ## 📈 Performance Optimization

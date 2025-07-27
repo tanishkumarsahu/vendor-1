@@ -1,148 +1,155 @@
 "use client"
 
-import type React from "react"
-import { createContext, useContext, useState, useEffect } from "react"
+import React, { createContext, useContext, useState, useEffect } from "react"
 import { useAuth } from "./AuthContext"
-import { supabase } from "@/lib/supabase"
-import { useToast } from "@/hooks/use-toast"
+import { toast } from "sonner"
 
 interface Notification {
-  id: string
-  user_id: string
-  type: "order" | "payment" | "system" | "promotion"
+  _id: string
+  userId: string
   title: string
   message: string
-  read: boolean
-  created_at: string
+  type: 'order' | 'payment' | 'group_order' | 'system'
+  isRead: boolean
+  data?: any
+  createdAt: string
 }
 
 interface NotificationContextType {
   notifications: Notification[]
   unreadCount: number
-  markAsRead: (id: string) => Promise<void>
+  markAsRead: (notificationId: string) => Promise<void>
   markAllAsRead: () => Promise<void>
-  deleteNotification: (id: string) => Promise<void>
-  clearAll: () => Promise<void>
+  deleteNotification: (notificationId: string) => Promise<void>
+  loadNotifications: () => Promise<void>
 }
 
 const NotificationContext = createContext<NotificationContextType | undefined>(undefined)
 
 export function NotificationProvider({ children }: { children: React.ReactNode }) {
-  const [notifications, setNotifications] = useState<Notification[]>([])
   const { user } = useAuth()
-  const { toast } = useToast()
+  const [notifications, setNotifications] = useState<Notification[]>([])
+  const [loading, setLoading] = useState(false)
 
-  const unreadCount = notifications.filter((n) => !n.read).length
+  const unreadCount = notifications.filter(n => !n.isRead).length
 
-  // Load notifications
   useEffect(() => {
     if (user) {
       loadNotifications()
-      subscribeToNotifications()
     }
   }, [user])
 
   const loadNotifications = async () => {
     if (!user) return
 
-    const { data, error } = await supabase
-      .from("notifications")
-      .select("*")
-      .eq("user_id", user.id)
-      .order("created_at", { ascending: false })
-      .limit(50)
-
-    if (error) {
-      console.error("Error loading notifications:", error)
-      return
-    }
-
-    setNotifications(data || [])
-  }
-
-  const subscribeToNotifications = () => {
-    if (!user) return
-
-    const subscription = supabase
-      .channel("notifications")
-      .on(
-        "postgres_changes",
-        {
-          event: "INSERT",
-          schema: "public",
-          table: "notifications",
-          filter: `user_id=eq.${user.id}`,
+    try {
+      setLoading(true)
+      const token = localStorage.getItem('authToken')
+      const response = await fetch('/api/notifications', {
+        headers: {
+          'Authorization': `Bearer ${token}`,
         },
-        (payload) => {
-          const newNotification = payload.new as Notification
-          setNotifications((prev) => [newNotification, ...prev])
+      })
 
-          // Show toast for new notifications
-          toast({
-            title: newNotification.title,
-            description: newNotification.message,
-            duration: 5000,
-          })
-        },
-      )
-      .subscribe()
-
-    return () => {
-      subscription.unsubscribe()
+      if (response.ok) {
+        const data = await response.json()
+        setNotifications(data.notifications)
+      } else {
+        console.error('Failed to load notifications')
+      }
+    } catch (error) {
+      console.error('Error loading notifications:', error)
+    } finally {
+      setLoading(false)
     }
   }
 
-  const markAsRead = async (id: string) => {
-    const { error } = await supabase.from("notifications").update({ read: true }).eq("id", id)
+  const markAsRead = async (notificationId: string) => {
+    try {
+      const token = localStorage.getItem('authToken')
+      const response = await fetch(`/api/notifications/${notificationId}/read`, {
+        method: 'PUT',
+        headers: {
+          'Authorization': `Bearer ${token}`,
+        },
+      })
 
-    if (!error) {
-      setNotifications((prev) => prev.map((n) => (n.id === id ? { ...n, read: true } : n)))
+      if (response.ok) {
+        setNotifications(prev =>
+          prev.map(notification =>
+            notification._id === notificationId
+              ? { ...notification, isRead: true }
+              : notification
+          )
+        )
+      } else {
+        toast.error('Failed to mark notification as read')
+      }
+    } catch (error) {
+      console.error('Error marking notification as read:', error)
+      toast.error('Error marking notification as read')
     }
   }
 
   const markAllAsRead = async () => {
-    if (!user) return
+    try {
+      const token = localStorage.getItem('authToken')
+      const response = await fetch('/api/notifications/read-all', {
+        method: 'PUT',
+        headers: {
+          'Authorization': `Bearer ${token}`,
+        },
+      })
 
-    const { error } = await supabase
-      .from("notifications")
-      .update({ read: true })
-      .eq("user_id", user.id)
-      .eq("read", false)
-
-    if (!error) {
-      setNotifications((prev) => prev.map((n) => ({ ...n, read: true })))
+      if (response.ok) {
+        setNotifications(prev =>
+          prev.map(notification => ({ ...notification, isRead: true }))
+        )
+        toast.success('All notifications marked as read')
+      } else {
+        toast.error('Failed to mark all notifications as read')
+      }
+    } catch (error) {
+      console.error('Error marking all notifications as read:', error)
+      toast.error('Error marking all notifications as read')
     }
   }
 
-  const deleteNotification = async (id: string) => {
-    const { error } = await supabase.from("notifications").delete().eq("id", id)
+  const deleteNotification = async (notificationId: string) => {
+    try {
+      const token = localStorage.getItem('authToken')
+      const response = await fetch(`/api/notifications/${notificationId}`, {
+        method: 'DELETE',
+        headers: {
+          'Authorization': `Bearer ${token}`,
+        },
+      })
 
-    if (!error) {
-      setNotifications((prev) => prev.filter((n) => n.id !== id))
+      if (response.ok) {
+        setNotifications(prev =>
+          prev.filter(notification => notification._id !== notificationId)
+        )
+        toast.success('Notification deleted')
+      } else {
+        toast.error('Failed to delete notification')
+      }
+    } catch (error) {
+      console.error('Error deleting notification:', error)
+      toast.error('Error deleting notification')
     }
   }
 
-  const clearAll = async () => {
-    if (!user) return
-
-    const { error } = await supabase.from("notifications").delete().eq("user_id", user.id)
-
-    if (!error) {
-      setNotifications([])
-    }
+  const value = {
+    notifications,
+    unreadCount,
+    markAsRead,
+    markAllAsRead,
+    deleteNotification,
+    loadNotifications,
   }
 
   return (
-    <NotificationContext.Provider
-      value={{
-        notifications,
-        unreadCount,
-        markAsRead,
-        markAllAsRead,
-        deleteNotification,
-        clearAll,
-      }}
-    >
+    <NotificationContext.Provider value={value}>
       {children}
     </NotificationContext.Provider>
   )

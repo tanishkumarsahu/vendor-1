@@ -71,13 +71,12 @@ VendorMitra provides a complete digital marketplace with:
 - **shadcn/ui**: Modern component library
 
 ### Backend
-- **Supabase**: Backend-as-a-Service
-- **PostgreSQL**: Relational database
+- **MongoDB**: Database
 - **Row Level Security**: Data protection policies
 - **Real-time Subscriptions**: Live updates
 
 ### Authentication
-- **Supabase Auth**: Secure authentication system
+- **JWT Auth**: Secure authentication system
 - **Role-based Access**: Vendor/Supplier permissions
 - **Session Management**: Persistent login states
 
@@ -149,7 +148,7 @@ VendorMitra provides a complete digital marketplace with:
 ### Prerequisites
 - Node.js 18+ 
 - npm or pnpm
-- Supabase account
+- MongoDB Atlas account
 
 ### Installation
 ```bash
@@ -162,10 +161,10 @@ npm install
 
 # Environment setup
 cp .env.example .env.local
-# Add your Supabase credentials
+# Add your MongoDB credentials
 
 # Database setup
-# Run scripts/setup-database.sql in Supabase SQL Editor
+# Run scripts/setup-database.sql in MongoDB (or follow MONGODB_SETUP.md)
 
 # Start development server
 npm run dev
@@ -173,8 +172,7 @@ npm run dev
 
 ### Environment Variables
 ```env
-NEXT_PUBLIC_SUPABASE_URL=your_supabase_url
-NEXT_PUBLIC_SUPABASE_ANON_KEY=your_supabase_anon_key
+MONGODB_URI=your_mongodb_connection_string
 ```
 
 ## 🎯 Impact & Innovation
@@ -247,7 +245,7 @@ NEXT_PUBLIC_SUPABASE_ANON_KEY=your_supabase_anon_key
 ### Team Information
 - **Project**: VendorMitra
 - **Category**: B2B Marketplace
-- **Technology**: Next.js, Supabase, TypeScript
+- **Technology**: Next.js, MongoDB, TypeScript
 - **Status**: Hackathon Ready
 
 ### Demo Access

@@ -11,7 +11,7 @@ import { Textarea } from "@/components/ui/textarea"
 import { Label } from "@/components/ui/label"
 import { Clock, CheckCircle, XCircle, Truck, Package, Users, MapPin, Calendar, IndianRupee } from "lucide-react"
 import { useAuth } from "@/contexts/AuthContext"
-import { supabase, Order, OrderItem } from "@/lib/supabase"
+import { mongoClient, Order, OrderItem } from "@/lib/mongodb-client"
 import { toast } from "sonner"
 
 interface SupplierOrderManagerProps {
@@ -50,7 +50,7 @@ export function SupplierOrderManager({ orders: initialOrders }: SupplierOrderMan
     try {
       if (!user?.id) return
 
-      const { data, error } = await supabase
+      const { data, error } = await mongoClient
         .from('orders')
         .select(`
           *,
@@ -77,7 +77,7 @@ export function SupplierOrderManager({ orders: initialOrders }: SupplierOrderMan
 
   const handleAcceptOrder = async (orderId: string) => {
     try {
-      const { error } = await supabase
+      const { error } = await mongoClient
         .from('orders')
         .update({ status: 'confirmed' })
         .eq('id', orderId)
@@ -98,7 +98,7 @@ export function SupplierOrderManager({ orders: initialOrders }: SupplierOrderMan
     }
 
     try {
-      const { error } = await supabase
+      const { error } = await mongoClient
         .from('orders')
         .update({ 
           status: 'cancelled',
@@ -119,7 +119,7 @@ export function SupplierOrderManager({ orders: initialOrders }: SupplierOrderMan
 
   const handleUpdateStatus = async (orderId: string, status: Order['status']) => {
     try {
-      const { error } = await supabase
+      const { error } = await mongoClient
         .from('orders')
         .update({ status })
         .eq('id', orderId)

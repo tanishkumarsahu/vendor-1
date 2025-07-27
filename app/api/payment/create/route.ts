@@ -1,125 +1,123 @@
-import { NextRequest, NextResponse } from 'next/server'
-import { instamojoService, type PaymentRequest } from '@/lib/instamojo'
-import { supabase } from '@/lib/supabase'
+import { NextRequest, NextResponse } from 'next/server';
+import { connectToDatabase, Order, Transaction, Product, VendorProfile, SupplierProfile } from '@/lib/mongodb';
+import { instamojoService } from '@/lib/instamojo';
+import jwt from 'jsonwebtoken';
 
 export async function POST(request: NextRequest) {
   try {
-    const body = await request.json()
-    const { orderId, items, buyerDetails, groupOrderId } = body
-
-    // Validate required fields
-    if (!orderId || !items || !buyerDetails) {
+    await connectToDatabase();
+    const body = await request.json();
+    
+    // Verify authentication
+    const authHeader = request.headers.get('authorization');
+    if (!authHeader || !authHeader.startsWith('Bearer ')) {
       return NextResponse.json(
-        { error: 'Missing required fields: orderId, items, buyerDetails' },
-        { status: 400 }
-      )
+        { error: 'Authentication required' },
+        { status: 401 }
+      );
     }
-
-    // Calculate total amount
-    const subtotal = items.reduce((sum: number, item: any) => sum + (item.quantity * item.unit_price), 0)
-    const deliveryCharges = body.deliveryCharges || 0
-    const totalAmount = subtotal + deliveryCharges
-
-    // Validate amount
-    if (totalAmount < 1) {
+    
+    const token = authHeader.substring(7);
+    const decoded = jwt.verify(token, process.env.JWT_SECRET || 'your-secret-key') as any;
+    
+    // Get order details
+    const { orderId, buyerDetails } = body;
+    
+    if (!orderId || !buyerDetails) {
       return NextResponse.json(
-        { error: 'Total amount must be at least ₹1' },
+        { error: 'Order ID and buyer details are required' },
         { status: 400 }
-      )
+      );
     }
-
-    // Create payment purpose
-    const purpose = groupOrderId 
-      ? `Group Order Payment - ${groupOrderId}`
-      : `Order Payment - ${orderId}`
-
-    // Prepare payment request data
-    const paymentData: PaymentRequest = {
-      purpose,
-      amount: totalAmount,
+    
+    // Get order with populated data
+    const order = await Order.findById(orderId)
+      .populate('vendorId')
+      .populate('supplierId')
+      .populate('items.productId');
+    
+    if (!order) {
+      return NextResponse.json(
+        { error: 'Order not found' },
+        { status: 404 }
+      );
+    }
+    
+    // Verify the user is the order owner
+    if (order.vendorId.userId.toString() !== decoded.userId) {
+      return NextResponse.json(
+        { error: 'Unauthorized access to order' },
+        { status: 403 }
+      );
+    }
+    
+    // Calculate total amount including fees and commission
+    const totalAmount = order.totalAmount;
+    const fees = instamojoService.calculateFees(totalAmount);
+    const commission = instamojoService.calculateCommission(totalAmount);
+    const finalAmount = totalAmount + fees;
+    
+    // Create payment request with Instamojo
+    const paymentRequest = await instamojoService.createPaymentRequest({
+      amount: finalAmount,
+      purpose: `Order #${order._id}`,
       buyer_name: buyerDetails.name,
       email: buyerDetails.email,
       phone: buyerDetails.phone,
-      redirect_url: `${process.env.NEXT_PUBLIC_BASE_URL || 'http://localhost:3000'}/payment/success?order_id=${orderId}`,
-    }
-
-    // Validate payment data
-    const validation = instamojoService.validatePaymentData(paymentData)
-    if (!validation.valid) {
+      redirect_url: `${process.env.NEXT_PUBLIC_APP_URL}/payment/success`,
+      webhook: `${process.env.NEXT_PUBLIC_APP_URL}/api/payment/webhook`,
+    });
+    
+    if (!paymentRequest.success) {
       return NextResponse.json(
-        { error: 'Invalid payment data', details: validation.errors },
-        { status: 400 }
-      )
-    }
-
-    // Create payment request with Instamojo
-    const paymentResponse = await instamojoService.createPaymentRequest(paymentData)
-
-    if (!paymentResponse.success) {
-      return NextResponse.json(
-        { error: paymentResponse.error || 'Failed to create payment request' },
+        { error: 'Failed to create payment request' },
         { status: 500 }
-      )
+      );
     }
-
-    // Calculate fees and commission
-    const fees = instamojoService.calculateFees(totalAmount)
-    const commissionAmount = instamojoService.calculateCommission(totalAmount)
-
-    // Create transaction record in database
-    const transactionData = {
-      id: instamojoService.generateTransactionId(),
-      order_id: orderId,
-      payment_request_id: paymentResponse.payment_request_id,
-      amount: totalAmount,
+    
+    // Create transaction record
+    const transaction = new Transaction({
+      orderId: order._id,
+      paymentRequestId: paymentRequest.payment_request_id,
+      amount: finalAmount,
       fees,
-      commission_amount: commissionAmount,
+      commission,
       status: 'pending',
-      buyer_email: buyerDetails.email,
-      buyer_name: buyerDetails.name,
-      gateway_response: paymentResponse,
-      created_at: new Date().toISOString(),
-      updated_at: new Date().toISOString()
-    }
-
-    const { error: transactionError } = await supabase
-      .from('transactions')
-      .insert(transactionData)
-
-    if (transactionError) {
-      console.error('Error creating transaction record:', transactionError)
-      // Don't fail the payment request if transaction record fails
-    }
-
+      buyerName: buyerDetails.name,
+      buyerEmail: buyerDetails.email,
+      buyerPhone: buyerDetails.phone,
+      instamojoResponse: paymentRequest,
+    });
+    
+    await transaction.save();
+    
     // Update order with payment information
-    const { error: orderError } = await supabase
-      .from('orders')
-      .update({
-        payment_id: paymentResponse.payment_request_id,
-        payment_status: 'pending',
-        updated_at: new Date().toISOString()
-      })
-      .eq('id', orderId)
-
-    if (orderError) {
-      console.error('Error updating order:', orderError)
-    }
-
+    order.paymentId = paymentRequest.payment_request_id;
+    order.paymentStatus = 'pending';
+    await order.save();
+    
     return NextResponse.json({
       success: true,
-      payment_request_id: paymentResponse.payment_request_id,
-      payment_url: paymentResponse.payment_url,
-      amount: totalAmount,
+      paymentUrl: paymentRequest.longurl,
+      paymentRequestId: paymentRequest.payment_request_id,
+      amount: finalAmount,
       fees,
-      commission_amount: commissionAmount,
-      message: 'Payment request created successfully'
-    })
-
-  } catch (error) {
-    console.error('Payment creation error:', error)
+      commission,
+    });
+    
+  } catch (error: any) {
+    console.error('Payment creation error:', error);
+    
+    if (error.name === 'JsonWebTokenError') {
+      return NextResponse.json(
+        { error: 'Invalid token' },
+        { status: 401 }
+      );
+    }
+    
     return NextResponse.json(
       { error: 'Internal server error' },
       { status: 500 }
-    )
+    );
   }
 } 

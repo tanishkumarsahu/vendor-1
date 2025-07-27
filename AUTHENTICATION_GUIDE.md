@@ -25,7 +25,7 @@ VendorMitra implements a complete role-based authentication system that supports
 ## 🔐 Authentication Features
 
 ### ✅ **Login System**
-- **Email/Password Authentication**: Secure login with Supabase Auth
+- **Email/Password Authentication**: Secure login with JWT Auth
 - **Role-based Access**: Automatic redirection to appropriate dashboard
 - **Session Management**: Persistent login across browser sessions
 - **Error Handling**: Clear error messages for invalid credentials
@@ -91,7 +91,7 @@ Account 2:
 1. User clicks "Sign In" on homepage
 2. AuthModal opens with login form
 3. User enters email and password
-4. Supabase Auth validates credentials
+4. JWT Auth validates credentials
 5. User profile is loaded from database
 6. User is redirected to role-specific dashboard:
    - Vendors → /dashboard/vendor
@@ -104,7 +104,7 @@ Account 2:
 2. AuthModal opens with registration form
 3. User selects role (Vendor/Supplier)
 4. User fills in required business details
-5. Supabase Auth creates user account
+5. JWT Auth creates user account
 6. User profile is created in database
 7. Email verification is sent
 8. User completes profile setup
@@ -183,14 +183,13 @@ supplier_profiles (user_id, company_name, gst_number, location, etc.)
 
 ### **Required Environment Variables**
 ```env
-NEXT_PUBLIC_SUPABASE_URL=your_supabase_project_url
-NEXT_PUBLIC_SUPABASE_ANON_KEY=your_supabase_anon_key
+MONGODB_URI=your_mongodb_connection_string
 ```
 
 ### **Database Setup**
-1. Run `scripts/setup-database.sql` in Supabase SQL Editor
+1. Run `scripts/setup-database.sql` in MongoDB (or follow MONGODB_SETUP.md)
 2. Enable Row Level Security policies
-3. Configure authentication settings in Supabase dashboard
+3. Configure authentication settings in your environment
 
 ## 🎉 Success Indicators
 

@@ -8,7 +8,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, LineChart, Line, PieChart, Pie, Cell } from "recharts"
 import { TrendingUp, TrendingDown, IndianRupee, Package, Users, Star, Calendar, Clock, CheckCircle, XCircle } from "lucide-react"
 import { useAuth } from "@/contexts/AuthContext"
-import { supabase, Order } from "@/lib/supabase"
+import { mongoClient, Order } from "@/lib/mongodb-client"
 
 const COLORS = ['#0088FE', '#00C49F', '#FFBB28', '#FF8042', '#8884D8']
 
@@ -39,12 +39,12 @@ export function SupplierAnalytics() {
       daysAgo.setDate(daysAgo.getDate() - parseInt(timeRange))
 
       // Fetch orders for the selected time range
-      const { data: orders, error } = await supabase
+      const { data: orders, error } = await mongoClient
         .from('orders')
         .select('*')
         .eq('supplier_id', user.id)
         .gte('created_at', daysAgo.toISOString())
-        .order('created_at', { ascending: true })
+        .order('created_at', { ascending: true });
 
       if (error) throw error
 

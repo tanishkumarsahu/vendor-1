@@ -304,7 +304,7 @@ export default function DemoPage() {
               </div>
               <div className="text-center p-3 bg-green-50 rounded">
                 <div className="font-semibold text-green-600">Backend</div>
-                <div className="text-sm text-gray-600">Supabase + PostgreSQL</div>
+                <div className="text-sm text-gray-600">MongoDB + Mongoose</div>
               </div>
               <div className="text-center p-3 bg-purple-50 rounded">
                 <div className="font-semibold text-purple-600">UI</div>
@@ -312,7 +312,7 @@ export default function DemoPage() {
               </div>
               <div className="text-center p-3 bg-orange-50 rounded">
                 <div className="font-semibold text-orange-600">Auth</div>
-                <div className="text-sm text-gray-600">Supabase Auth</div>
+                <div className="text-sm text-gray-600">JWT Auth</div>
               </div>
             </div>
           </CardContent>

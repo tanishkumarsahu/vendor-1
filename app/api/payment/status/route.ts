@@ -1,84 +1,74 @@
-import { NextRequest, NextResponse } from 'next/server'
-import { instamojoService } from '@/lib/instamojo'
-import { supabase } from '@/lib/supabase'
+import { NextRequest, NextResponse } from 'next/server';
+import { connectToDatabase, Transaction, Order } from '@/lib/mongodb';
 
 export async function GET(request: NextRequest) {
   try {
-    const { searchParams } = new URL(request.url)
-    const paymentRequestId = searchParams.get('payment_request_id')
-    const orderId = searchParams.get('order_id')
-
+    await connectToDatabase();
+    
+    const { searchParams } = new URL(request.url);
+    const paymentRequestId = searchParams.get('payment_request_id');
+    const orderId = searchParams.get('order_id');
+    
     if (!paymentRequestId && !orderId) {
       return NextResponse.json(
-        { error: 'Missing payment_request_id or order_id parameter' },
+        { error: 'Payment request ID or order ID is required' },
         { status: 400 }
-      )
+      );
     }
-
-    let transaction
-
+    
+    let transaction;
     if (paymentRequestId) {
-      const { data, error } = await supabase
-        .from('transactions')
-        .select('*')
-        .eq('payment_request_id', paymentRequestId)
-        .single()
-
-      if (error) {
-        return NextResponse.json(
-          { error: 'Transaction not found' },
-          { status: 404 }
-        )
-      }
-      transaction = data
+      transaction = await Transaction.findOne({ paymentRequestId });
     } else if (orderId) {
-      const { data, error } = await supabase
-        .from('transactions')
-        .select('*')
-        .eq('order_id', orderId)
-        .single()
-
-      if (error) {
-        return NextResponse.json(
-          { error: 'Transaction not found' },
-          { status: 404 }
-        )
-      }
-      transaction = data
+      transaction = await Transaction.findOne({ orderId });
     }
-
+    
+    if (!transaction) {
+      return NextResponse.json(
+        { error: 'Transaction not found' },
+        { status: 404 }
+      );
+    }
+    
     // Get order details
-    const { data: order } = await supabase
-      .from('orders')
-      .select('*')
-      .eq('id', transaction.order_id)
-      .single()
-
+    const order = await Order.findById(transaction.orderId)
+      .populate('vendorId')
+      .populate('supplierId')
+      .populate('items.productId');
+    
     return NextResponse.json({
       success: true,
       transaction: {
-        id: transaction.id,
-        status: transaction.status,
+        id: transaction._id,
+        paymentRequestId: transaction.paymentRequestId,
         amount: transaction.amount,
         fees: transaction.fees,
-        commission_amount: transaction.commission_amount,
-        created_at: transaction.created_at,
-        updated_at: transaction.updated_at
+        commission: transaction.commission,
+        status: transaction.status,
+        buyerName: transaction.buyerName,
+        buyerEmail: transaction.buyerEmail,
+        buyerPhone: transaction.buyerPhone,
+        createdAt: transaction.createdAt,
+        updatedAt: transaction.updatedAt,
       },
       order: order ? {
-        id: order.id,
+        id: order._id,
         status: order.status,
-        payment_status: order.payment_status,
-        total: order.total,
-        created_at: order.created_at
-      } : null
-    })
-
-  } catch (error) {
-    console.error('Payment status check error:', error)
+        paymentStatus: order.paymentStatus,
+        totalAmount: order.totalAmount,
+        items: order.items,
+        vendor: order.vendorId,
+        supplier: order.supplierId,
+        createdAt: order.createdAt,
+        updatedAt: order.updatedAt,
+      } : null,
+    });
+    
+  } catch (error: any) {
+    console.error('Payment status error:', error);
     return NextResponse.json(
       { error: 'Internal server error' },
       { status: 500 }
-    )
+    );
   }
 } 

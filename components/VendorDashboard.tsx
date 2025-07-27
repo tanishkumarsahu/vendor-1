@@ -22,7 +22,7 @@ import { DashboardHeader } from "@/components/DashboardHeader"
 import { ProductDiscovery } from "@/components/ProductDiscovery"
 import { OrderHistory } from "@/components/OrderHistory"
 import { GroupOrders } from "@/components/GroupOrders"
-import { supabase } from "@/lib/supabase"
+import { mongoClient } from "@/lib/mongodb-client"
 
 export function VendorDashboard() {
   const { user } = useAuth()
@@ -47,7 +47,7 @@ export function VendorDashboard() {
 
     try {
       // Load order statistics
-      const { data: orders } = await supabase.from("orders").select("*").eq("vendor_id", user.id)
+      const { data: orders } = await mongoClient.from("orders").select("*").eq("vendor_id", user.id)
 
       if (orders) {
         const totalOrders = orders.length

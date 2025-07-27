@@ -6,10 +6,10 @@ import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { Package, Clock, CheckCircle, Truck, Star, RotateCcw, Eye, MessageCircle } from "lucide-react"
-import { supabase } from "@/lib/supabase"
+import { mongoClient } from "@/lib/mongodb-client"
 import { useAuth } from "@/contexts/AuthContext"
 import { useToast } from "@/hooks/use-toast"
-import type { Order, OrderItem, Product, SupplierProfile } from "@/lib/supabase"
+import type { Order, OrderItem, Product, SupplierProfile } from "@/lib/mongodb-client"
 
 interface OrderWithDetails extends Order {
   items: (OrderItem & { product: Product })[]
@@ -35,7 +35,7 @@ export function OrderHistory() {
     try {
       setLoading(true)
 
-      const { data: ordersData, error } = await supabase
+      const { data: ordersData, error } = await mongoClient
         .from("orders")
         .select(`
           *,

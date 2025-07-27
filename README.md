@@ -20,8 +20,8 @@ A comprehensive B2B marketplace platform connecting street food vendors with ver
 
 - **Frontend**: Next.js 15, React 19, TypeScript
 - **UI Components**: shadcn/ui, Tailwind CSS
-- **Database**: Supabase (PostgreSQL)
-- **Authentication**: Supabase Auth
+- **Database**: MongoDB (with Mongoose)
+- **Authentication**: JWT-based (using bcryptjs, jsonwebtoken)
 - **Charts**: Recharts
 - **Icons**: Lucide React
 - **Notifications**: Sonner
@@ -30,14 +30,14 @@ A comprehensive B2B marketplace platform connecting street food vendors with ver
 
 - Node.js 18+ 
 - npm or pnpm
-- Supabase account
+- MongoDB Atlas account (or a local MongoDB instance)
 
 ## 🚀 Quick Start
 
 ### 1. Clone the Repository
 ```bash
 git clone <repository-url>
-cd vendor-1
+cd vendor-mitra
 ```
 
 ### 2. Install Dependencies
@@ -47,22 +47,19 @@ npm install
 pnpm install
 ```
 
-### 3. Set Up Supabase
+### 3. Set Up MongoDB
 
-1. Create a new project at [supabase.com](https://supabase.com)
-2. Go to Settings → API and copy your project URL and anon key
-3. Create a `.env.local` file in the root directory:
+1. Create a new MongoDB Atlas project or use a local MongoDB instance
+2. Update your `.env.local` file with your MongoDB connection string:
 
 ```env
-NEXT_PUBLIC_SUPABASE_URL=your_supabase_project_url
-NEXT_PUBLIC_SUPABASE_ANON_KEY=your_supabase_anon_key
+MONGODB_URI=your_mongodb_connection_string
 ```
 
 ### 4. Set Up Database
 
-1. Go to your Supabase project SQL Editor
-2. Run the SQL script from `scripts/setup-database.sql`
-3. This will create all necessary tables and policies
+1. Run the SQL script from `scripts/setup-database.sql` (if using SQL for reference) or set up your MongoDB collections as per `MONGODB_SETUP.md`
+2. This will create all necessary collections and indexes
 
 ### 5. Start Development Server
 ```bash
@@ -95,7 +92,7 @@ vendor-1/
 │   ├── AuthContext.tsx   # Authentication context
 │   └── ...
 ├── lib/                  # Utility libraries
-│   ├── supabase.ts       # Supabase client
+│   ├── mongodb-client.ts       # MongoDB client
 │   └── utils.ts          # Utility functions
 ├── scripts/              # Database scripts
 └── public/               # Static assets
@@ -108,9 +105,8 @@ vendor-1/
 Create a `.env.local` file with the following variables:
 
 ```env
-# Supabase Configuration
-NEXT_PUBLIC_SUPABASE_URL=your_supabase_project_url
-NEXT_PUBLIC_SUPABASE_ANON_KEY=your_supabase_anon_key
+# MongoDB Configuration
+MONGODB_URI=your_mongodb_connection_string
 ```
 
 ### Database Schema
@@ -171,7 +167,7 @@ This project is licensed under the MIT License.
 For support and questions:
 - Create an issue in the repository
 - Check the `/test` page for debugging
-- Review the Supabase documentation
+- Review the MongoDB documentation
 
 ## 🎉 Hackathon Ready
 

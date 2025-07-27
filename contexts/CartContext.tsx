@@ -1,29 +1,29 @@
 "use client"
 
-import type React from "react"
-import { createContext, useContext, useState, useEffect } from "react"
+import React, { createContext, useContext, useState, useEffect } from "react"
 import { useAuth } from "./AuthContext"
-import { supabase } from "@/lib/supabase"
+import { toast } from "sonner"
 import { instamojoService } from "@/lib/instamojo"
-import type { Product } from "@/lib/supabase"
 
 interface CartItem {
   id: string
-  product: Product
+  name: string
+  price: number
   quantity: number
-  unit_price: number
-  total_price: number
+  supplierId: string
+  supplierName: string
+  image?: string
 }
 
 interface CartContextType {
   items: CartItem[]
-  totalItems: number
-  totalAmount: number
-  addItem: (product: Product, quantity: number) => void
-  removeItem: (productId: string) => void
-  updateQuantity: (productId: string, quantity: number) => void
+  addItem: (item: CartItem) => void
+  removeItem: (id: string) => void
+  updateQuantity: (id: string, quantity: number) => void
   clearCart: () => void
-  createOrder: () => Promise<{ success?: boolean; error?: string; paymentUrl?: string }>
+  getTotal: () => number
+  getItemCount: () => number
+  createOrder: (buyerDetails: any) => Promise<{ success: boolean; error?: string; orderId?: string }>
 }
 
 const CartContext = createContext<CartContextType | undefined>(undefined)
@@ -32,207 +32,199 @@ export function CartProvider({ children }: { children: React.ReactNode }) {
   const [items, setItems] = useState<CartItem[]>([])
   const { user } = useAuth()
 
-  const totalItems = items.reduce((sum, item) => sum + item.quantity, 0)
-  const totalAmount = items.reduce((sum, item) => sum + item.total_price, 0)
+  // Load cart from localStorage on mount
+  useEffect(() => {
+    const savedCart = localStorage.getItem('cart')
+    if (savedCart) {
+      try {
+        setItems(JSON.parse(savedCart))
+      } catch (error) {
+        console.error('Error parsing cart from localStorage:', error)
+        localStorage.removeItem('cart')
+      }
+    }
+  }, [])
 
-  const addItem = (product: Product, quantity: number) => {
-    setItems((prevItems) => {
-      const existingItem = prevItems.find((item) => item.product.id === product.id)
+  // Save cart to localStorage whenever items change
+  useEffect(() => {
+    localStorage.setItem('cart', JSON.stringify(items))
+  }, [items])
 
+  const addItem = (newItem: CartItem) => {
+    setItems(currentItems => {
+      const existingItem = currentItems.find(item => item.id === newItem.id)
+      
       if (existingItem) {
-        return prevItems.map((item) =>
-          item.product.id === product.id
-            ? {
-                ...item,
-                quantity: item.quantity + quantity,
-                total_price: (item.quantity + quantity) * item.unit_price,
-              }
-            : item,
+        return currentItems.map(item =>
+          item.id === newItem.id
+            ? { ...item, quantity: item.quantity + newItem.quantity }
+            : item
         )
       } else {
-        return [
-          ...prevItems,
-          {
-            id: `${product.id}-${Date.now()}`,
-            product,
-            quantity,
-            unit_price: product.price,
-            total_price: quantity * product.price,
-          },
-        ]
+        return [...currentItems, newItem]
       }
     })
+    
+    toast.success(`${newItem.name} added to cart`)
   }
 
-  const removeItem = (productId: string) => {
-    setItems((prevItems) => prevItems.filter((item) => item.product.id !== productId))
+  const removeItem = (id: string) => {
+    setItems(currentItems => currentItems.filter(item => item.id !== id))
+    toast.success("Item removed from cart")
   }
 
-  const updateQuantity = (productId: string, quantity: number) => {
+  const updateQuantity = (id: string, quantity: number) => {
     if (quantity <= 0) {
-      removeItem(productId)
+      removeItem(id)
       return
     }
-
-    setItems((prevItems) =>
-      prevItems.map((item) =>
-        item.product.id === productId
-          ? {
-              ...item,
-              quantity,
-              total_price: quantity * item.unit_price,
-            }
-          : item,
-      ),
+    
+    setItems(currentItems =>
+      currentItems.map(item =>
+        item.id === id ? { ...item, quantity } : item
+      )
     )
   }
 
   const clearCart = () => {
     setItems([])
+    toast.success("Cart cleared")
   }
 
-  const createOrder = async () => {
-    if (!user || items.length === 0) {
-      return { error: "Invalid order data" }
+  const getTotal = () => {
+    return items.reduce((total, item) => total + (item.price * item.quantity), 0)
+  }
+
+  const getItemCount = () => {
+    return items.reduce((count, item) => count + item.quantity, 0)
+  }
+
+  const createOrder = async (buyerDetails: any) => {
+    if (!user) {
+      return { success: false, error: "User not authenticated" }
+    }
+
+    if (items.length === 0) {
+      return { success: false, error: "Cart is empty" }
     }
 
     try {
+      const token = localStorage.getItem('authToken')
+      
       // Group items by supplier
-      const supplierGroups = items.reduce(
-        (groups, item) => {
-          const supplierId = item.product.supplier_id
-          if (!groups[supplierId]) {
-            groups[supplierId] = []
-          }
-          groups[supplierId].push(item)
-          return groups
-        },
-        {} as Record<string, CartItem[]>,
-      )
+      const supplierGroups = items.reduce((groups, item) => {
+        if (!groups[item.supplierId]) {
+          groups[item.supplierId] = []
+        }
+        groups[item.supplierId].push(item)
+        return groups
+      }, {} as Record<string, CartItem[]>)
+
+      const orderIds: string[] = []
 
       // Create orders for each supplier
-      const orders = []
-
       for (const [supplierId, supplierItems] of Object.entries(supplierGroups)) {
-        const subtotal = supplierItems.reduce((sum, item) => sum + item.total_price, 0)
-        const deliveryCharges = subtotal > 1000 ? 0 : 50 // Free delivery above ₹1000
-        const total = subtotal + deliveryCharges
+        const totalOrderAmount = supplierItems.reduce((total, item) => total + (item.price * item.quantity), 0)
+        const commission = instamojoService.calculateCommission(totalOrderAmount)
 
-        const { data: order, error } = await supabase
-          .from("orders")
-          .insert({
-            vendor_id: user.id,
-            supplier_id: supplierId,
-            subtotal,
-            delivery_charges: deliveryCharges,
-            total,
-            status: "pending",
-          })
-          .select()
-          .single()
+        const orderData = {
+          supplierId,
+          items: supplierItems.map(item => ({
+            productId: item.id,
+            quantity: item.quantity,
+            price: item.price,
+            total: item.price * item.quantity,
+          })),
+          totalAmount: totalOrderAmount,
+          commission,
+          shippingAddress: buyerDetails.address,
+          deliveryCharges: 0, // You can calculate this based on location
+        }
 
-        if (error) throw error
+        const response = await fetch('/api/orders', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'Authorization': `Bearer ${token}`,
+          },
+          body: JSON.stringify(orderData),
+        })
 
-        // Create order items
-        const orderItems = supplierItems.map((item) => ({
-          order_id: order.id,
-          product_id: item.product.id,
-          quantity: item.quantity,
-          unit_price: item.unit_price,
-          total_price: item.total_price,
-        }))
+        if (!response.ok) {
+          const error = await response.json()
+          throw new Error(error.error || 'Failed to create order')
+        }
 
-        const { error: itemsError } = await supabase.from("order_items").insert(orderItems)
+        const result = await response.json()
+        orderIds.push(result.order._id)
 
-        if (itemsError) throw itemsError
+        // Create payment request for this order
+        const paymentRequest = await instamojoService.createPaymentRequest({
+          amount: totalOrderAmount + instamojoService.calculateFees(totalOrderAmount),
+          purpose: `Order #${result.order._id}`,
+          buyer_name: buyerDetails.name,
+          email: buyerDetails.email,
+          phone: buyerDetails.phone,
+          redirect_url: `${process.env.NEXT_PUBLIC_APP_URL || 'http://localhost:3000'}/payment/success`,
+          webhook: `${process.env.NEXT_PUBLIC_APP_URL || 'http://localhost:3000'}/api/payment/webhook`,
+        })
 
-        orders.push(order)
-      }
+        if (!paymentRequest.success) {
+          throw new Error('Failed to create payment request')
+        }
 
-      // Create payment request for total amount
-      const totalOrderAmount = orders.reduce((sum, order) => sum + order.total, 0)
-      const commission = instamojoService.calculateCommission(totalOrderAmount)
-
-              const paymentRequest = await instamojoService.createPaymentRequest({
-        purpose: `VendorMitra Order - ${orders.map((o) => o.id).join(", ")}`,
-        amount: totalOrderAmount,
-        buyer_name: user.profile?.business_name || user.email || "Customer",
-        email: user.email || "",
-        phone: user.profile?.phone || "9999999999",
-        redirect_url: `${window.location.origin}/payment/success`,
-        webhook: `${window.location.origin}/api/payment/webhook`,
-        allow_repeated_payments: false,
-      })
-
-      if (paymentRequest.success) {
-        // Update orders with payment ID
-        for (const order of orders) {
-          await supabase.from("orders").update({ payment_id: paymentRequest.payment_request.id }).eq("id", order.id)
-
-          // Create transaction record
-          await supabase.from("transactions").insert({
-            order_id: order.id,
-            payment_id: paymentRequest.payment_request.id,
-            amount: order.total,
-            status: "pending",
+        // Create transaction record
+        const transactionResponse = await fetch('/api/transactions', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'Authorization': `Bearer ${token}`,
+          },
+          body: JSON.stringify({
+            orderId: result.order._id,
+            paymentRequestId: paymentRequest.payment_request_id,
+            amount: totalOrderAmount + instamojoService.calculateFees(totalOrderAmount),
+            fees: instamojoService.calculateFees(totalOrderAmount),
             commission,
-          })
-        }
+            buyerName: buyerDetails.name,
+            buyerEmail: buyerDetails.email,
+            buyerPhone: buyerDetails.phone,
+            instamojoResponse: paymentRequest,
+          }),
+        })
 
-        clearCart()
-        return {
-          success: true,
-          paymentUrl: paymentRequest.payment_request.longurl,
+        if (!transactionResponse.ok) {
+          console.error('Failed to create transaction record')
         }
-      } else {
-        throw new Error("Payment request failed")
       }
+
+      // Clear cart after successful order creation
+      clearCart()
+
+      return { 
+        success: true, 
+        orderId: orderIds[0], // Return the first order ID for simplicity
+        message: `Order created successfully with ${orderIds.length} order(s)` 
+      }
+
     } catch (error: any) {
-      console.error("Order creation error:", error)
-      return { error: error.message || "Order creation failed" }
+      console.error('Error creating order:', error)
+      return { success: false, error: error.message || 'Failed to create order' }
     }
   }
 
-  // Persist cart to localStorage
-  useEffect(() => {
-    if (typeof window !== "undefined") {
-      const savedCart = localStorage.getItem("vendormitra_cart")
-      if (savedCart) {
-        try {
-          setItems(JSON.parse(savedCart))
-        } catch (error) {
-          console.error("Error loading cart from localStorage:", error)
-        }
-      }
-    }
-  }, [])
+  const value = {
+    items,
+    addItem,
+    removeItem,
+    updateQuantity,
+    clearCart,
+    getTotal,
+    getItemCount,
+    createOrder,
+  }
 
-  useEffect(() => {
-    if (typeof window !== "undefined") {
-      try {
-        localStorage.setItem("vendormitra_cart", JSON.stringify(items))
-      } catch (error) {
-        console.error("Error saving cart to localStorage:", error)
-      }
-    }
-  }, [items])
-
-  return (
-    <CartContext.Provider
-      value={{
-        items,
-        totalItems,
-        totalAmount,
-        addItem,
-        removeItem,
-        updateQuantity,
-        clearCart,
-        createOrder,
-      }}
-    >
-      {children}
-    </CartContext.Provider>
-  )
+  return <CartContext.Provider value={value}>{children}</CartContext.Provider>
 }
 
 export function useCart() {

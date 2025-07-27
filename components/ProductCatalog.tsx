@@ -1,25 +1,35 @@
 "use client"
 
 import { useState, useEffect } from "react"
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Textarea } from "@/components/ui/textarea"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
-import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog"
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Badge } from "@/components/ui/badge"
-import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
-import { Plus, Edit, Trash2, Package, IndianRupee, AlertCircle } from "lucide-react"
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog"
 import { useAuth } from "@/contexts/AuthContext"
-import { supabase, Product } from "@/lib/supabase"
 import { toast } from "sonner"
+import { Plus, Edit, Trash2, Package, DollarSign, TrendingUp } from "lucide-react"
 
-interface ProductCatalogProps {
-  products?: any[]
+interface Product {
+  _id: string
+  name: string
+  description: string
+  category: string
+  price: number
+  originalPrice?: number
+  stock: number
+  images: string[]
+  isActive: boolean
+  rating: number
+  totalReviews: number
+  createdAt: string
+  updatedAt: string
 }
 
-export function ProductCatalog({ products: initialProducts }: ProductCatalogProps) {
+export function ProductCatalog() {
   const { user } = useAuth()
   const [products, setProducts] = useState<Product[]>([])
   const [loading, setLoading] = useState(true)
@@ -27,47 +37,38 @@ export function ProductCatalog({ products: initialProducts }: ProductCatalogProp
   const [editingProduct, setEditingProduct] = useState<Product | null>(null)
   const [formData, setFormData] = useState({
     name: "",
-    category: "",
-    subcategory: "",
-    price: "",
-    bulk_price: "",
-    stock: "",
-    unit: "",
     description: "",
-    image_url: ""
+    category: "",
+    price: "",
+    originalPrice: "",
+    stock: "",
+    images: "",
   })
 
-  const categories = [
-    "Vegetables", "Fruits", "Grains", "Spices", "Oil", "Dairy", 
-    "Meat", "Seafood", "Beverages", "Snacks", "Other"
-  ]
-
-  const units = ["kg", "liter", "piece", "pack", "dozen", "gram", "ml"]
-
   useEffect(() => {
-    if (initialProducts) {
-      setProducts(initialProducts)
-      setLoading(false)
-    } else {
-      fetchProducts()
+    if (user) {
+      loadProducts()
     }
-  }, [initialProducts])
+  }, [user])
 
-  const fetchProducts = async () => {
+  const loadProducts = async () => {
     try {
-      if (!user?.id) return
-
-      const { data, error } = await supabase
-        .from('products')
-        .select('*')
-        .eq('supplier_id', user.id)
-        .order('created_at', { ascending: false })
-
-      if (error) throw error
-      setProducts(data || [])
+      const token = localStorage.getItem('authToken')
+      const response = await fetch('/api/products', {
+        headers: {
+          'Authorization': `Bearer ${token}`,
+        },
+      })
+      
+      if (response.ok) {
+        const data = await response.json()
+        setProducts(data.products)
+      } else {
+        toast.error('Failed to load products')
+      }
     } catch (error) {
-      console.error('Error fetching products:', error)
-      toast.error('Failed to load products')
+      console.error('Error loading products:', error)
+      toast.error('Error loading products')
     } finally {
       setLoading(false)
     }
@@ -75,62 +76,64 @@ export function ProductCatalog({ products: initialProducts }: ProductCatalogProp
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
-    if (!user?.id) return
-
+    
     try {
-      const productData = {
-        supplier_id: user.id,
-        name: formData.name,
-        category: formData.category,
-        subcategory: formData.subcategory || null,
-        price: parseFloat(formData.price),
-        bulk_price: formData.bulk_price ? parseFloat(formData.bulk_price) : null,
-        stock: parseInt(formData.stock),
-        unit: formData.unit,
-        description: formData.description || null,
-        image_url: formData.image_url || null
-      }
+      const token = localStorage.getItem('authToken')
+      const url = editingProduct 
+        ? `/api/products/${editingProduct._id}`
+        : '/api/products'
+      
+      const response = await fetch(url, {
+        method: editingProduct ? 'PUT' : 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${token}`,
+        },
+        body: JSON.stringify({
+          ...formData,
+          price: parseFloat(formData.price),
+          originalPrice: formData.originalPrice ? parseFloat(formData.originalPrice) : undefined,
+          stock: parseInt(formData.stock),
+          images: formData.images ? formData.images.split(',').map(img => img.trim()) : [],
+        }),
+      })
 
-      if (editingProduct) {
-        const { error } = await supabase
-          .from('products')
-          .update(productData)
-          .eq('id', editingProduct.id)
-
-        if (error) throw error
-        toast.success('Product updated successfully')
+      if (response.ok) {
+        toast.success(editingProduct ? 'Product updated successfully' : 'Product created successfully')
+        setIsDialogOpen(false)
+        resetForm()
+        loadProducts()
       } else {
-        const { error } = await supabase
-          .from('products')
-          .insert([productData])
-
-        if (error) throw error
-        toast.success('Product added successfully')
+        const error = await response.json()
+        toast.error(error.error || 'Failed to save product')
       }
-
-      resetForm()
-      fetchProducts()
     } catch (error) {
       console.error('Error saving product:', error)
-      toast.error('Failed to save product')
+      toast.error('Error saving product')
     }
   }
 
   const handleDelete = async (productId: string) => {
     if (!confirm('Are you sure you want to delete this product?')) return
-
+    
     try {
-      const { error } = await supabase
-        .from('products')
-        .delete()
-        .eq('id', productId)
+      const token = localStorage.getItem('authToken')
+      const response = await fetch(`/api/products/${productId}`, {
+        method: 'DELETE',
+        headers: {
+          'Authorization': `Bearer ${token}`,
+        },
+      })
 
-      if (error) throw error
-      toast.success('Product deleted successfully')
-      fetchProducts()
+      if (response.ok) {
+        toast.success('Product deleted successfully')
+        loadProducts()
+      } else {
+        toast.error('Failed to delete product')
+      }
     } catch (error) {
       console.error('Error deleting product:', error)
-      toast.error('Failed to delete product')
+      toast.error('Error deleting product')
     }
   }
 
@@ -138,14 +141,12 @@ export function ProductCatalog({ products: initialProducts }: ProductCatalogProp
     setEditingProduct(product)
     setFormData({
       name: product.name,
+      description: product.description,
       category: product.category,
-      subcategory: product.subcategory || "",
       price: product.price.toString(),
-      bulk_price: product.bulk_price?.toString() || "",
+      originalPrice: product.originalPrice?.toString() || "",
       stock: product.stock.toString(),
-      unit: product.unit,
-      description: product.description || "",
-      image_url: product.image_url || ""
+      images: product.images.join(', '),
     })
     setIsDialogOpen(true)
   }
@@ -153,252 +154,233 @@ export function ProductCatalog({ products: initialProducts }: ProductCatalogProp
   const resetForm = () => {
     setFormData({
       name: "",
-      category: "",
-      subcategory: "",
-      price: "",
-      bulk_price: "",
-      stock: "",
-      unit: "",
       description: "",
-      image_url: ""
+      category: "",
+      price: "",
+      originalPrice: "",
+      stock: "",
+      images: "",
     })
     setEditingProduct(null)
-    setIsDialogOpen(false)
   }
+
+  const categories = [
+    'electronics', 'clothing', 'home', 'automotive', 'health', 
+    'beauty', 'sports', 'books', 'food', 'other'
+  ]
 
   if (loading) {
     return (
-      <Card>
-        <CardHeader>
-          <CardTitle>Product Catalog</CardTitle>
-          <CardDescription>Loading products...</CardDescription>
-        </CardHeader>
-      </Card>
+      <div className="flex items-center justify-center h-64">
+        <div className="text-center">
+          <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600 mx-auto"></div>
+          <p className="mt-2 text-gray-600">Loading products...</p>
+        </div>
+      </div>
     )
   }
 
   return (
-    <Card>
-      <CardHeader>
-        <div className="flex items-center justify-between">
-          <div>
-            <CardTitle>Product Catalog</CardTitle>
-            <CardDescription>Manage your product inventory and pricing</CardDescription>
-          </div>
-          <Dialog open={isDialogOpen} onOpenChange={setIsDialogOpen}>
-            <DialogTrigger asChild>
-              <Button onClick={() => resetForm()}>
-                <Plus className="mr-2 h-4 w-4" />
-                Add Product
-              </Button>
-            </DialogTrigger>
-            <DialogContent className="max-w-2xl">
-              <DialogHeader>
-                <DialogTitle>{editingProduct ? 'Edit Product' : 'Add New Product'}</DialogTitle>
-                <DialogDescription>
-                  {editingProduct ? 'Update product information' : 'Add a new product to your catalog'}
-                </DialogDescription>
-              </DialogHeader>
-              <form onSubmit={handleSubmit} className="space-y-4">
-                <div className="grid grid-cols-2 gap-4">
-                  <div>
-                    <Label htmlFor="name">Product Name</Label>
-                    <Input
-                      id="name"
-                      value={formData.name}
-                      onChange={(e) => setFormData({ ...formData, name: e.target.value })}
-                      required
-                    />
-                  </div>
-                  <div>
-                    <Label htmlFor="category">Category</Label>
-                    <Select value={formData.category} onValueChange={(value) => setFormData({ ...formData, category: value })}>
-                      <SelectTrigger>
-                        <SelectValue placeholder="Select category" />
-                      </SelectTrigger>
-                      <SelectContent>
-                        {categories.map((category) => (
-                          <SelectItem key={category} value={category}>{category}</SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
-                  </div>
-                </div>
-
-                <div className="grid grid-cols-3 gap-4">
-                  <div>
-                    <Label htmlFor="price">Price (₹)</Label>
-                    <Input
-                      id="price"
-                      type="number"
-                      step="0.01"
-                      value={formData.price}
-                      onChange={(e) => setFormData({ ...formData, price: e.target.value })}
-                      required
-                    />
-                  </div>
-                  <div>
-                    <Label htmlFor="bulk_price">Bulk Price (₹)</Label>
-                    <Input
-                      id="bulk_price"
-                      type="number"
-                      step="0.01"
-                      value={formData.bulk_price}
-                      onChange={(e) => setFormData({ ...formData, bulk_price: e.target.value })}
-                      placeholder="Optional"
-                    />
-                  </div>
-                  <div>
-                    <Label htmlFor="unit">Unit</Label>
-                    <Select value={formData.unit} onValueChange={(value) => setFormData({ ...formData, unit: value })}>
-                      <SelectTrigger>
-                        <SelectValue placeholder="Select unit" />
-                      </SelectTrigger>
-                      <SelectContent>
-                        {units.map((unit) => (
-                          <SelectItem key={unit} value={unit}>{unit}</SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
-                  </div>
-                </div>
-
-                <div className="grid grid-cols-2 gap-4">
-                  <div>
-                    <Label htmlFor="stock">Stock Quantity</Label>
-                    <Input
-                      id="stock"
-                      type="number"
-                      value={formData.stock}
-                      onChange={(e) => setFormData({ ...formData, stock: e.target.value })}
-                      required
-                    />
-                  </div>
-                  <div>
-                    <Label htmlFor="subcategory">Subcategory</Label>
-                    <Input
-                      id="subcategory"
-                      value={formData.subcategory}
-                      onChange={(e) => setFormData({ ...formData, subcategory: e.target.value })}
-                      placeholder="Optional"
-                    />
-                  </div>
-                </div>
-
-                <div>
-                  <Label htmlFor="description">Description</Label>
-                  <Textarea
-                    id="description"
-                    value={formData.description}
-                    onChange={(e) => setFormData({ ...formData, description: e.target.value })}
-                    placeholder="Product description..."
-                  />
-                </div>
-
-                <div>
-                  <Label htmlFor="image_url">Image URL</Label>
-                  <Input
-                    id="image_url"
-                    type="url"
-                    value={formData.image_url}
-                    onChange={(e) => setFormData({ ...formData, image_url: e.target.value })}
-                    placeholder="https://example.com/image.jpg"
-                  />
-                </div>
-
-                <DialogFooter>
-                  <Button type="button" variant="outline" onClick={resetForm}>
-                    Cancel
-                  </Button>
-                  <Button type="submit">
-                    {editingProduct ? 'Update Product' : 'Add Product'}
-                  </Button>
-                </DialogFooter>
-              </form>
-            </DialogContent>
-          </Dialog>
+    <div className="space-y-6">
+      <div className="flex justify-between items-center">
+        <div>
+          <h2 className="text-2xl font-bold">Product Catalog</h2>
+          <p className="text-gray-600">Manage your product inventory</p>
         </div>
-      </CardHeader>
-      <CardContent>
-        {products.length === 0 ? (
-          <div className="text-center py-8">
-            <Package className="mx-auto h-12 w-12 text-gray-400" />
-            <h3 className="mt-2 text-sm font-medium text-gray-900">No products</h3>
-            <p className="mt-1 text-sm text-gray-500">Get started by adding your first product.</p>
-          </div>
-        ) : (
-          <Table>
-            <TableHeader>
-              <TableRow>
-                <TableHead>Product</TableHead>
-                <TableHead>Category</TableHead>
-                <TableHead>Price</TableHead>
-                <TableHead>Stock</TableHead>
-                <TableHead>Status</TableHead>
-                <TableHead>Actions</TableHead>
-              </TableRow>
-            </TableHeader>
-            <TableBody>
-              {products.map((product) => (
-                <TableRow key={product.id}>
-                  <TableCell>
-                    <div>
-                      <div className="font-medium">{product.name}</div>
-                      {product.description && (
-                        <div className="text-sm text-gray-500">{product.description}</div>
-                      )}
-                    </div>
-                  </TableCell>
-                  <TableCell>
-                    <Badge variant="outline">{product.category}</Badge>
-                  </TableCell>
-                  <TableCell>
-                    <div>
-                      <div className="font-medium">₹{product.price}/{product.unit}</div>
-                      {product.bulk_price && (
-                        <div className="text-sm text-gray-500">Bulk: ₹{product.bulk_price}</div>
-                      )}
-                    </div>
-                  </TableCell>
-                  <TableCell>
-                    <div className="flex items-center">
-                      <span className={product.stock < 50 ? "text-red-600 font-medium" : ""}>
-                        {product.stock} {product.unit}
-                      </span>
-                      {product.stock < 50 && (
-                        <AlertCircle className="ml-1 h-4 w-4 text-red-500" />
-                      )}
-                    </div>
-                  </TableCell>
-                  <TableCell>
-                    <Badge variant={product.stock > 0 ? "default" : "destructive"}>
-                      {product.stock > 0 ? "In Stock" : "Out of Stock"}
-                    </Badge>
-                  </TableCell>
-                  <TableCell>
-                    <div className="flex space-x-2">
-                      <Button
-                        size="sm"
-                        variant="outline"
-                        onClick={() => handleEdit(product)}
-                      >
-                        <Edit className="h-4 w-4" />
-                      </Button>
-                      <Button
-                        size="sm"
-                        variant="outline"
-                        onClick={() => handleDelete(product.id)}
-                      >
-                        <Trash2 className="h-4 w-4" />
-                      </Button>
-                    </div>
-                  </TableCell>
-                </TableRow>
-              ))}
-            </TableBody>
-          </Table>
-        )}
-      </CardContent>
-    </Card>
+        <Dialog open={isDialogOpen} onOpenChange={setIsDialogOpen}>
+          <DialogTrigger asChild>
+            <Button onClick={resetForm}>
+              <Plus className="mr-2 h-4 w-4" />
+              Add Product
+            </Button>
+          </DialogTrigger>
+          <DialogContent className="sm:max-w-[600px]">
+            <DialogHeader>
+              <DialogTitle>
+                {editingProduct ? 'Edit Product' : 'Add New Product'}
+              </DialogTitle>
+            </DialogHeader>
+            <form onSubmit={handleSubmit} className="space-y-4">
+              <div className="grid grid-cols-2 gap-4">
+                <div className="space-y-2">
+                  <Label htmlFor="name">Product Name</Label>
+                  <Input
+                    id="name"
+                    value={formData.name}
+                    onChange={(e) => setFormData({ ...formData, name: e.target.value })}
+                    placeholder="Enter product name"
+                    required
+                  />
+                </div>
+                <div className="space-y-2">
+                  <Label htmlFor="category">Category</Label>
+                  <Select value={formData.category} onValueChange={(value) => setFormData({ ...formData, category: value })}>
+                    <SelectTrigger>
+                      <SelectValue placeholder="Select category" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {categories.map((category) => (
+                        <SelectItem key={category} value={category}>
+                          {category.charAt(0).toUpperCase() + category.slice(1)}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+              </div>
+              
+              <div className="space-y-2">
+                <Label htmlFor="description">Description</Label>
+                <Textarea
+                  id="description"
+                  value={formData.description}
+                  onChange={(e) => setFormData({ ...formData, description: e.target.value })}
+                  placeholder="Enter product description"
+                  required
+                />
+              </div>
+              
+              <div className="grid grid-cols-3 gap-4">
+                <div className="space-y-2">
+                  <Label htmlFor="price">Price (₹)</Label>
+                  <Input
+                    id="price"
+                    type="number"
+                    step="0.01"
+                    value={formData.price}
+                    onChange={(e) => setFormData({ ...formData, price: e.target.value })}
+                    placeholder="0.00"
+                    required
+                  />
+                </div>
+                <div className="space-y-2">
+                  <Label htmlFor="originalPrice">Original Price (₹)</Label>
+                  <Input
+                    id="originalPrice"
+                    type="number"
+                    step="0.01"
+                    value={formData.originalPrice}
+                    onChange={(e) => setFormData({ ...formData, originalPrice: e.target.value })}
+                    placeholder="0.00"
+                  />
+                </div>
+                <div className="space-y-2">
+                  <Label htmlFor="stock">Stock Quantity</Label>
+                  <Input
+                    id="stock"
+                    type="number"
+                    value={formData.stock}
+                    onChange={(e) => setFormData({ ...formData, stock: e.target.value })}
+                    placeholder="0"
+                    required
+                  />
+                </div>
+              </div>
+              
+              <div className="space-y-2">
+                <Label htmlFor="images">Image URLs (comma-separated)</Label>
+                <Input
+                  id="images"
+                  value={formData.images}
+                  onChange={(e) => setFormData({ ...formData, images: e.target.value })}
+                  placeholder="https://example.com/image1.jpg, https://example.com/image2.jpg"
+                />
+              </div>
+              
+              <div className="flex justify-end space-x-2">
+                <Button type="button" variant="outline" onClick={() => setIsDialogOpen(false)}>
+                  Cancel
+                </Button>
+                <Button type="submit">
+                  {editingProduct ? 'Update Product' : 'Create Product'}
+                </Button>
+              </div>
+            </form>
+          </DialogContent>
+        </Dialog>
+      </div>
+
+      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+        {products.map((product) => (
+          <Card key={product._id} className="overflow-hidden">
+            <div className="aspect-square bg-gray-100 flex items-center justify-center">
+              {product.images && product.images.length > 0 ? (
+                <img
+                  src={product.images[0]}
+                  alt={product.name}
+                  className="w-full h-full object-cover"
+                />
+              ) : (
+                <Package className="h-12 w-12 text-gray-400" />
+              )}
+            </div>
+            <CardHeader className="p-4">
+              <div className="flex justify-between items-start">
+                <div>
+                  <CardTitle className="text-lg">{product.name}</CardTitle>
+                  <CardDescription className="line-clamp-2">
+                    {product.description}
+                  </CardDescription>
+                </div>
+                <Badge variant={product.isActive ? "default" : "secondary"}>
+                  {product.isActive ? "Active" : "Inactive"}
+                </Badge>
+              </div>
+              <div className="flex items-center justify-between mt-2">
+                <div className="flex items-center space-x-2">
+                  <DollarSign className="h-4 w-4 text-green-600" />
+                  <span className="font-semibold">₹{product.price}</span>
+                  {product.originalPrice && product.originalPrice > product.price && (
+                    <span className="text-sm text-gray-500 line-through">
+                      ₹{product.originalPrice}
+                    </span>
+                  )}
+                </div>
+                <div className="flex items-center space-x-1">
+                  <TrendingUp className="h-4 w-4 text-blue-600" />
+                  <span className="text-sm text-gray-600">{product.rating}/5</span>
+                </div>
+              </div>
+            </CardHeader>
+            <CardContent className="p-4 pt-0">
+              <div className="flex items-center justify-between mb-3">
+                <Badge variant="outline">{product.category}</Badge>
+                <span className="text-sm text-gray-600">Stock: {product.stock}</span>
+              </div>
+              <div className="flex space-x-2">
+                <Button
+                  size="sm"
+                  variant="outline"
+                  onClick={() => handleEdit(product)}
+                  className="flex-1"
+                >
+                  <Edit className="mr-1 h-3 w-3" />
+                  Edit
+                </Button>
+                <Button
+                  size="sm"
+                  variant="destructive"
+                  onClick={() => handleDelete(product._id)}
+                  className="flex-1"
+                >
+                  <Trash2 className="mr-1 h-3 w-3" />
+                  Delete
+                </Button>
+              </div>
+            </CardContent>
+          </Card>
+        ))}
+      </div>
+
+      {products.length === 0 && !loading && (
+        <div className="text-center py-12">
+          <Package className="mx-auto h-12 w-12 text-gray-400" />
+          <h3 className="mt-2 text-sm font-medium text-gray-900">No products</h3>
+          <p className="mt-1 text-sm text-gray-500">
+            Get started by creating your first product.
+          </p>
+        </div>
+      )}
+    </div>
   )
 } 

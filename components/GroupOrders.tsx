@@ -10,10 +10,10 @@ import { Textarea } from "@/components/ui/textarea"
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog"
 import { Label } from "@/components/ui/label"
 import { Users, Plus, Clock, TrendingDown, MapPin, Calendar } from "lucide-react"
-import { supabase } from "@/lib/supabase"
+import { mongoClient } from "@/lib/mongodb-client"
 import { useAuth } from "@/contexts/AuthContext"
 import { useToast } from "@/hooks/use-toast"
-import type { GroupOrder, Product, VendorProfile } from "@/lib/supabase"
+import type { GroupOrder, Product, VendorProfile } from "@/lib/mongodb-client"
 
 interface GroupOrderWithDetails extends GroupOrder {
   product?: Product
@@ -48,7 +48,7 @@ export function GroupOrders() {
       setLoading(true)
 
       // Load active group orders
-      const { data: activeOrders, error: activeError } = await supabase
+      const { data: activeOrders, error: activeError } = await mongoClient
         .from("group_orders")
         .select(`
           *,
@@ -61,7 +61,7 @@ export function GroupOrders() {
       if (activeError) throw activeError
 
       // Load user's group orders
-      const { data: userOrders, error: userError } = await supabase
+      const { data: userOrders, error: userError } = await mongoClient
         .from("group_orders")
         .select(`
           *,
@@ -111,7 +111,7 @@ export function GroupOrders() {
         return
       }
 
-      const { data, error } = await supabase
+      const { data, error } = await mongoClient
         .from("group_orders")
         .insert({
           creator_id: user.id,

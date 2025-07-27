@@ -3,7 +3,11 @@ import bcrypt from 'bcryptjs';
 import jwt from 'jsonwebtoken';
 
 // MongoDB Connection
-const MONGODB_URI = process.env.MONGODB_URI || 'mongodb://localhost:27017/vendormitra';
+const MONGODB_URI = process.env.MONGODB_URI;
+
+if (!MONGODB_URI) {
+  throw new Error('Please define the MONGODB_URI environment variable inside .env.local');
+}
 
 let cached = global.mongoose;
 
@@ -18,10 +22,13 @@ export async function connectToDatabase() {
 
   if (!cached.promise) {
     const opts = {
+      useNewUrlParser: true,
+      useUnifiedTopology: true,
       bufferCommands: false,
     };
 
     cached.promise = mongoose.connect(MONGODB_URI, opts).then((mongoose) => {
+      console.log('MongoDB connected');
       return mongoose;
     });
   }
@@ -35,6 +42,16 @@ export async function connectToDatabase() {
 
   return cached.conn;
 }
+
+mongoose.connection.on('error', (err) => {
+  console.error('MongoDB connection error:', err);
+  process.exit(1);
+});
+
+mongoose.connection.on('disconnected', () => {
+  console.log('MongoDB disconnected');
+});
+
 
 // User Schema
 const userSchema = new mongoose.Schema({

@@ -1,53 +1,37 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { connectToDatabase, User, Profile, VendorProfile, SupplierProfile } from '@/lib/mongodb';
+import { mongoClient } from '@/lib/mongodb-client';
 import { signUpSchema } from '@/lib/validations';
+import { User } from '@/lib/mongodb';
 
 export async function POST(request: NextRequest) {
   try {
-    await connectToDatabase();
     const body = await request.json();
-    
-    // Validate input
     const validatedData = signUpSchema.parse(body);
-    
-    // Check if user already exists
-    const existingUser = await User.findOne({ email: validatedData.email });
+
+    const existingUser = await mongoClient.from('users').select('_id').eq('email', validatedData.email);
     if (existingUser) {
-      return NextResponse.json(
-        { error: 'User with this email already exists' },
-        { status: 400 }
-      );
+      return NextResponse.json({ error: 'User with this email already exists' }, { status: 400 });
     }
-    
-    // Create user
-    const user = new User({
-      email: validatedData.email,
-      password: validatedData.password,
-      role: validatedData.role,
-    });
-    
-    await user.save();
-    
-    // Create profile
-    const profile = new Profile({
-      userId: user._id,
-      firstName: validatedData.firstName,
-      lastName: validatedData.lastName,
-      phone: validatedData.phone,
-      address: {
-        street: validatedData.street,
-        city: validatedData.city,
-        state: validatedData.state,
-        pincode: validatedData.pincode,
-      },
-    });
-    
-    await profile.save();
-    
-    // Create role-specific profile
-    if (validatedData.role === 'vendor') {
-      const vendorProfile = new VendorProfile({
-        userId: user._id,
+
+    const user = await mongoClient.withTransaction(async (session) => {
+      const newUser = await mongoClient.from('users').insert(validatedData, { session });
+
+      const profileData = {
+        userId: newUser._id,
+        firstName: validatedData.firstName,
+        lastName: validatedData.lastName,
+        phone: validatedData.phone,
+        address: {
+          street: validatedData.street,
+          city: validatedData.city,
+          state: validatedData.state,
+          pincode: validatedData.pincode,
+        },
+      };
+      await mongoClient.from('profiles').insert(profileData, { session });
+
+      const roleProfileData = {
+        userId: newUser._id,
         businessName: validatedData.businessName,
         businessType: validatedData.businessType,
         gstNumber: validatedData.gstNumber,
@@ -59,31 +43,19 @@ export async function POST(request: NextRequest) {
           pincode: validatedData.pincode,
         },
         phone: validatedData.phone,
-      });
-      
-      await vendorProfile.save();
-    } else if (validatedData.role === 'supplier') {
-      const supplierProfile = new SupplierProfile({
-        userId: user._id,
-        businessName: validatedData.businessName,
-        businessType: validatedData.businessType,
-        gstNumber: validatedData.gstNumber,
-        panNumber: validatedData.panNumber,
-        address: {
-          street: validatedData.street,
-          city: validatedData.city,
-          state: validatedData.state,
-          pincode: validatedData.pincode,
-        },
-        phone: validatedData.phone,
-      });
-      
-      await supplierProfile.save();
-    }
-    
-    // Generate JWT token
-    const token = user.generateToken();
-    
+      };
+
+      if (validatedData.role === 'vendor') {
+        await mongoClient.from('vendor_profiles').insert(roleProfileData, { session });
+      } else if (validatedData.role === 'supplier') {
+        await mongoClient.from('supplier_profiles').insert(roleProfileData, { session });
+      }
+
+      return newUser;
+    });
+
+    const token = new User(user).generateToken();
+
     return NextResponse.json({
       success: true,
       message: 'User registered successfully',
@@ -95,27 +67,13 @@ export async function POST(request: NextRequest) {
       },
       token,
     });
-    
   } catch (error: any) {
     console.error('Signup error:', error);
-    
-    if (error.name === 'ValidationError') {
-      return NextResponse.json(
-        { error: 'Validation failed', details: error.message },
-        { status: 400 }
-      );
-    }
-    
+
     if (error.name === 'ZodError') {
-      return NextResponse.json(
-        { error: 'Invalid input data', details: error.errors },
-        { status: 400 }
-      );
+      return NextResponse.json({ error: 'Invalid input data', details: error.errors }, { status: 400 });
     }
-    
-    return NextResponse.json(
-      { error: 'Internal server error' },
-      { status: 500 }
-    );
+
+    return NextResponse.json({ error: 'Internal server error' }, { status: 500 });
   }
 } 

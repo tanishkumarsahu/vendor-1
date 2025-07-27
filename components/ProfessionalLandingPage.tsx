@@ -28,9 +28,6 @@ import { useAuth } from "@/contexts/AuthContext"
 import { useRouter } from "next/navigation"
 
 export function ProfessionalLandingPage() {
-  const [showAuthModal, setShowAuthModal] = useState(false)
-  const [authType, setAuthType] = useState<"login" | "register">("login")
-  const [userType, setUserType] = useState<"vendor" | "supplier">("vendor")
   const { user } = useAuth()
   const router = useRouter()
 
@@ -154,61 +151,38 @@ export function ProfessionalLandingPage() {
   ]
 
   return (
-    <div className="min-h-screen bg-white">
-      {/* Professional Header */}
-      <header className="bg-white border-b border-gray-200 sticky top-0 z-50">
+    <div className="min-h-screen bg-gradient-to-br from-blue-50 via-white to-green-50">
+      {/* Header */}
+      <header className="bg-white/80 backdrop-blur-sm border-b border-gray-200 sticky top-0 z-50">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
           <div className="flex justify-between items-center h-16">
             {/* Logo */}
-            <div className="flex items-center space-x-3">
-              <div className="w-10 h-10 bg-blue-600 rounded-lg flex items-center justify-center">
-                <span className="text-white font-bold text-lg">VM</span>
+            <div className="flex items-center space-x-2">
+              <div className="w-8 h-8 bg-gradient-to-r from-blue-600 to-green-600 rounded-lg flex items-center justify-center">
+                <Package className="w-5 h-5 text-white" />
               </div>
-              <div>
-                <div className="text-xl font-bold text-gray-900">VendorMitra</div>
-                <div className="text-xs text-gray-500">B2B Marketplace</div>
-              </div>
+              <span className="text-xl font-bold text-gray-900">VendorMitra</span>
             </div>
 
-            {/* Search Bar */}
-            <div className="hidden md:flex flex-1 max-w-lg mx-8">
-              <div className="relative w-full">
-                <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 h-4 w-4" />
-                <Input
-                  placeholder="Search suppliers, products..."
-                  className="pl-10 pr-4 py-2 w-full border-gray-300 focus:border-blue-500 focus:ring-blue-500"
-                />
-                <MapPin className="absolute right-3 top-1/2 transform -translate-y-1/2 text-gray-400 h-4 w-4" />
-              </div>
-            </div>
+            {/* Navigation */}
+            <nav className="hidden md:flex items-center space-x-8">
+              <a href="#features" className="text-gray-600 hover:text-gray-900 transition-colors">
+                Features
+              </a>
+              <a href="#how-it-works" className="text-gray-600 hover:text-gray-900 transition-colors">
+                How it Works
+              </a>
+              <a href="#pricing" className="text-gray-600 hover:text-gray-900 transition-colors">
+                Pricing
+              </a>
+              <a href="#contact" className="text-gray-600 hover:text-gray-900 transition-colors">
+                Contact
+              </a>
+            </nav>
 
-            {/* Action Buttons */}
+            {/* Auth Buttons */}
             <div className="flex items-center space-x-4">
-              <div className="relative">
-                <Bell className="h-5 w-5 text-gray-600" />
-                <span className="absolute -top-1 -right-1 h-3 w-3 bg-red-500 rounded-full"></span>
-              </div>
-
-              <Button
-                variant="ghost"
-                onClick={() => {
-                  setAuthType("login")
-                  setShowAuthModal(true)
-                }}
-                className="text-gray-700 hover:text-blue-600"
-              >
-                Sign In
-              </Button>
-
-              <Button
-                onClick={() => {
-                  setAuthType("register")
-                  setShowAuthModal(true)
-                }}
-                className="vm-btn-primary"
-              >
-                Join Now
-              </Button>
+              <AuthModal />
             </div>
           </div>
         </div>
@@ -268,11 +242,6 @@ export function ProfessionalLandingPage() {
                 <Button
                   size="lg"
                   className="bg-white text-blue-600 hover:bg-gray-100 font-semibold px-8 py-4 rounded-lg shadow-lg"
-                  onClick={() => {
-                    setUserType("vendor")
-                    setAuthType("register")
-                    setShowAuthModal(true)
-                  }}
                 >
                   <Users className="mr-2 h-5 w-5" />
                   Start as Vendor
@@ -281,11 +250,6 @@ export function ProfessionalLandingPage() {
                   size="lg"
                   variant="outline"
                   className="border-2 border-white text-white hover:bg-white hover:text-blue-600 font-semibold px-8 py-4 rounded-lg bg-transparent"
-                  onClick={() => {
-                    setUserType("supplier")
-                    setAuthType("register")
-                    setShowAuthModal(true)
-                  }}
                 >
                   <Package className="mr-2 h-5 w-5" />
                   Become Supplier
@@ -425,10 +389,6 @@ export function ProfessionalLandingPage() {
             <Button
               size="lg"
               className="bg-white text-blue-600 hover:bg-gray-100 font-semibold px-8 py-4"
-              onClick={() => {
-                setAuthType("register")
-                setShowAuthModal(true)
-              }}
             >
               Get Started Today
               <ArrowRight className="ml-2 h-5 w-5" />
@@ -564,14 +524,7 @@ export function ProfessionalLandingPage() {
       </footer>
 
       {/* Auth Modal */}
-      <AuthModal
-        isOpen={showAuthModal}
-        onClose={() => setShowAuthModal(false)}
-        type={authType}
-        userType={userType}
-        onTypeChange={setAuthType}
-        onUserTypeChange={setUserType}
-      />
+      <AuthModal />
     </div>
   )
 }

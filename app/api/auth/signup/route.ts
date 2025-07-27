@@ -1,69 +1,116 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { mongoClient } from '@/lib/mongodb-client';
+import { connectToDatabase } from '@/lib/mongodb';
 import { signUpSchema } from '@/lib/validations';
-import { User } from '@/lib/mongodb';
+import bcrypt from 'bcryptjs';
+import jwt from 'jsonwebtoken';
 
 export async function POST(request: NextRequest) {
   try {
     const body = await request.json();
+    console.log('Signup request body:', body);
+    
     const validatedData = signUpSchema.parse(body);
+    console.log('Validated signup data:', validatedData);
 
-    const existingUser = await mongoClient.from('users').select('_id').eq('email', validatedData.email);
+    const { db } = await connectToDatabase();
+    console.log('Connected to database');
+
+    // Check if user already exists
+    const existingUser = await db.collection('users').findOne({ email: validatedData.email });
+    console.log('Existing user check:', existingUser ? 'User exists' : 'No existing user');
+    
     if (existingUser) {
       return NextResponse.json({ error: 'User with this email already exists' }, { status: 400 });
     }
 
-    const user = await mongoClient.withTransaction(async (session) => {
-      const newUser = await mongoClient.from('users').insert(validatedData, { session });
+    // Hash password
+    const hashedPassword = await bcrypt.hash(validatedData.password, 12);
 
-      const profileData = {
-        userId: newUser._id,
-        firstName: validatedData.firstName,
-        lastName: validatedData.lastName,
-        phone: validatedData.phone,
-        address: {
-          street: validatedData.street,
-          city: validatedData.city,
-          state: validatedData.state,
-          pincode: validatedData.pincode,
-        },
-      };
-      await mongoClient.from('profiles').insert(profileData, { session });
+    // Create user
+    const userData = {
+      email: validatedData.email,
+      password: hashedPassword,
+      role: validatedData.role,
+      emailVerified: false,
+      createdAt: new Date(),
+      updatedAt: new Date()
+    };
 
-      const roleProfileData = {
-        userId: newUser._id,
-        businessName: validatedData.businessName,
-        businessType: validatedData.businessType,
-        gstNumber: validatedData.gstNumber,
-        panNumber: validatedData.panNumber,
-        address: {
-          street: validatedData.street,
-          city: validatedData.city,
-          state: validatedData.state,
-          pincode: validatedData.pincode,
-        },
-        phone: validatedData.phone,
-      };
+    const result = await db.collection('users').insertOne(userData);
+    const userId = result.insertedId;
 
-      if (validatedData.role === 'vendor') {
-        await mongoClient.from('vendor_profiles').insert(roleProfileData, { session });
-      } else if (validatedData.role === 'supplier') {
-        await mongoClient.from('supplier_profiles').insert(roleProfileData, { session });
-      }
+    // Compose address string
+    const address = `${validatedData.street}, ${validatedData.city}, ${validatedData.state} - ${validatedData.pincode}`;
 
-      return newUser;
-    });
+    // Create profile
+    const profileData = {
+      userId: userId,
+      firstName: validatedData.firstName,
+      lastName: validatedData.lastName,
+      businessName: validatedData.businessName,
+      phone: validatedData.phone,
+      address: {
+        street: validatedData.street,
+        city: validatedData.city,
+        state: validatedData.state,
+        pincode: validatedData.pincode,
+        country: 'India'
+      },
+      gstNumber: validatedData.gstNumber || '',
+      panNumber: validatedData.panNumber || '',
+      foodType: validatedData.foodType || '',
+      createdAt: new Date(),
+      updatedAt: new Date()
+    };
 
-    const token = new User(user).generateToken();
+    await db.collection('profiles').insertOne(profileData);
+
+    // Create role-specific profile
+    const roleProfileData = {
+      userId: userId,
+      businessName: validatedData.businessName,
+      businessType: validatedData.businessType,
+      phone: validatedData.phone,
+      address: {
+        street: validatedData.street,
+        city: validatedData.city,
+        state: validatedData.state,
+        pincode: validatedData.pincode,
+        country: 'India'
+      },
+      gstNumber: validatedData.gstNumber || '',
+      panNumber: validatedData.panNumber || '',
+      foodType: validatedData.foodType || '',
+      verificationStatus: false,
+      rating: 0,
+      createdAt: new Date(),
+      updatedAt: new Date()
+    };
+
+    if (validatedData.role === 'vendor') {
+      roleProfileData.totalOrders = 0;
+      await db.collection('vendor_profiles').insertOne(roleProfileData);
+    } else if (validatedData.role === 'supplier') {
+      roleProfileData.totalProducts = 0;
+      roleProfileData.totalRevenue = 0;
+      await db.collection('supplier_profiles').insertOne(roleProfileData);
+    }
+
+    // Generate JWT token
+    const token = jwt.sign(
+      { userId: userId.toString(), email: validatedData.email, role: validatedData.role },
+      process.env.JWT_SECRET || 'fallback-secret',
+      { expiresIn: '7d' }
+    );
 
     return NextResponse.json({
       success: true,
       message: 'User registered successfully',
       user: {
-        id: user._id,
-        email: user.email,
-        role: user.role,
-        emailVerified: user.emailVerified,
+        id: userId.toString(),
+        email: validatedData.email,
+        role: validatedData.role,
+        emailVerified: false,
       },
       token,
     });

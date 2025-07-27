@@ -26,25 +26,38 @@ export function AuthModal() {
   const [signInEmail, setSignInEmail] = useState("")
   const [signInPassword, setSignInPassword] = useState("")
 
-  // Sign Up State
+  // Sign Up State - Updated to include all form fields
   const [signUpData, setSignUpData] = useState({
+    firstName: "",
+    lastName: "",
     email: "",
     password: "",
     confirmPassword: "",
     role: "",
     businessName: "",
+    businessType: "",
     gstNumber: "",
+    panNumber: "",
     phone: "",
     street: "",
     city: "",
     state: "",
     pincode: "",
-    foodType: "", // ADDED
+    foodType: "",
   })
 
   const handleSignIn = async (e: React.FormEvent) => {
     e.preventDefault()
     setIsLoading(true)
+
+    console.log('SignIn attempt:', { email: signInEmail, password: signInPassword })
+
+    // Validate required fields
+    if (!signInEmail || !signInPassword) {
+      toast.error("Please enter both email and password");
+      setIsLoading(false);
+      return;
+    }
 
     try {
       const result = await signIn(signInEmail, signInPassword)
@@ -68,29 +81,44 @@ export function AuthModal() {
     e.preventDefault();
     setIsLoading(true);
 
+    console.log('SignUp form data:', signUpData);
+
+    // Validate required fields
+    const requiredFields = ['firstName', 'lastName', 'email', 'password', 'role', 'businessName', 'businessType', 'phone', 'street', 'city', 'state', 'pincode'];
+    const missingFields = requiredFields.filter(field => !signUpData[field as keyof typeof signUpData]);
+    
+    if (missingFields.length > 0) {
+      toast.error(`Please fill in all required fields: ${missingFields.join(', ')}`);
+      setIsLoading(false);
+      return;
+    }
+
     if (signUpData.password !== signUpData.confirmPassword) {
       toast.error("Passwords do not match");
       setIsLoading(false);
       return;
     }
 
-    // Compose address string
-    const address = `${signUpData.street}, ${signUpData.city}, ${signUpData.state} - ${signUpData.pincode}`;
-
     // Prepare the payload to match backend schema
     const payload = {
+      firstName: signUpData.firstName,
+      lastName: signUpData.lastName,
       email: signUpData.email,
       password: signUpData.password,
       role: signUpData.role,
       businessName: signUpData.businessName,
+      businessType: signUpData.businessType,
       phone: signUpData.phone,
-      address,
+      street: signUpData.street,
       city: signUpData.city,
       state: signUpData.state,
       pincode: signUpData.pincode,
       gstNumber: signUpData.gstNumber,
+      panNumber: signUpData.panNumber,
       foodType: signUpData.foodType,
     };
+
+    console.log('SignUp payload:', payload);
 
     try {
       const result = await signUp(payload);
@@ -100,12 +128,16 @@ export function AuthModal() {
         toast.success("Registration Successful! Please check your email to verify your account.");
         setIsOpen(false);
         setSignUpData({
+          firstName: "",
+          lastName: "",
           email: "",
           password: "",
           confirmPassword: "",
           role: "",
           businessName: "",
+          businessType: "",
           gstNumber: "",
+          panNumber: "",
           phone: "",
           street: "",
           city: "",
@@ -122,6 +154,7 @@ export function AuthModal() {
   };
 
   const updateSignUpData = (field: string, value: string) => {
+    console.log(`Updating ${field} to:`, value);
     setSignUpData(prev => ({ ...prev, [field]: value }))
   }
 

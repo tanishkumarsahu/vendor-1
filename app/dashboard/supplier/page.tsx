@@ -68,7 +68,7 @@ interface Vendor {
 }
 
 export default function SupplierDashboard() {
-  const { user, loading } = useAuth()
+  const { user, loading: authLoading } = useAuth()
   const router = useRouter()
   const [activeTab, setActiveTab] = useState("orders")
   const [products, setProducts] = useState<Product[]>([])
@@ -242,12 +242,12 @@ export default function SupplierDashboard() {
   }
 
   useEffect(() => {
-    if (!loading && !user) {
+    if (!authLoading && !user) {
       router.push("/")
     }
-  }, [user, loading, router])
+  }, [user, authLoading, router])
 
-  if (loading) {
+  if (authLoading) {
     return (
       <div className="min-h-screen flex items-center justify-center bg-gray-50">
         <div className="text-center">

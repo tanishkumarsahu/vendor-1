@@ -3,18 +3,22 @@ import { VALIDATION_RULES } from './constants'
 
 // User authentication schemas
 export const signUpSchema = z.object({
+  firstName: z.string().min(2, 'First name must be at least 2 characters'),
+  lastName: z.string().min(2, 'Last name must be at least 2 characters'),
   email: z.string().email('Invalid email address'),
   password: z.string().min(8, 'Password must be at least 8 characters'),
   role: z.enum(['vendor', 'supplier'], {
     required_error: 'Please select a role'
   }),
   businessName: z.string().min(2, 'Business name must be at least 2 characters'),
-  phone: z.string().regex(VALIDATION_RULES.PHONE, 'Invalid phone number'),
-  address: z.string().min(10, 'Address must be at least 10 characters'),
+  businessType: z.string().min(1, 'Business type is required'),
+  phone: z.string().min(10, 'Phone number must be at least 10 digits').max(15, 'Phone number must not exceed 15 digits'),
+  street: z.string().min(5, 'Street address must be at least 5 characters'),
   city: z.string().min(2, 'City must be at least 2 characters'),
   state: z.string().min(2, 'State must be at least 2 characters'),
   pincode: z.string().regex(VALIDATION_RULES.PINCODE, 'Invalid pincode'),
   gstNumber: z.string().optional(),
+  panNumber: z.string().optional(),
   foodType: z.string().optional()
 })
 
